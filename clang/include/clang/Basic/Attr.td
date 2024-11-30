@@ -2542,7 +2542,6 @@ def BPFPreserveAccessIndex : InheritableAttr,
   let Spellings = [Clang<"preserve_access_index">];
   let Subjects = SubjectList<[Record], ErrorDiag>;
   let Documentation = [BPFPreserveAccessIndexDocs];
-  let LangOpts = [COnly];
 }
 
 def BPFPreserveStaticOffset : InheritableAttr,
@@ -2550,7 +2549,6 @@ def BPFPreserveStaticOffset : InheritableAttr,
   let Spellings = [Clang<"preserve_static_offset">];
   let Subjects = SubjectList<[Record], ErrorDiag>;
   let Documentation = [BPFPreserveStaticOffsetDocs];
-  let LangOpts = [COnly];
 }
 
 def BTFDeclTag : InheritableAttr {
@@ -2559,14 +2557,12 @@ def BTFDeclTag : InheritableAttr {
   let Subjects = SubjectList<[Var, Function, Record, Field, TypedefName],
                              ErrorDiag>;
   let Documentation = [BTFDeclTagDocs];
-  let LangOpts = [COnly];
 }
 
 def BTFTypeTag : TypeAttr {
   let Spellings = [Clang<"btf_type_tag">];
   let Args = [StringArgument<"BTFTypeTag">];
   let Documentation = [BTFTypeTagDocs];
-  let LangOpts = [COnly];
 }
 
 def BPFFastCall : InheritableAttr,
@@ -2574,7 +2570,6 @@ def BPFFastCall : InheritableAttr,
   let Spellings = [Clang<"bpf_fastcall">];
   let Subjects = SubjectList<[FunctionLike]>;
   let Documentation = [BPFFastCallDocs];
-  let LangOpts = [COnly];
   let SimpleHandler = 1;
 }
 
