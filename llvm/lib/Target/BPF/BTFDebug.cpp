@@ -589,7 +589,8 @@ void BTFTypeStruct::completeType(BTFDebug &BDebug) {
       break;
     }
     default:
-      llvm_unreachable("Unexpected DI tag of a struct/union element");
+      // Skip C++ elements like methods, inheritance, template params.
+      continue;
     }
     Members.push_back(BTFMember);
   }
@@ -977,7 +978,12 @@ int BTFDebug::genBTFTypeTags(const DIDerivedType *DTy, int BaseTypeId) {
 void BTFDebug::visitStructType(const DICompositeType *CTy, bool IsStruct,
                                uint32_t &TypeId) {
   DINodeArray DIElements = CTy->getElements();
-  SmallVector<const DINode *, 8> Elements(DIElements.begin(), DIElements.end());
+  SmallVector<const DINode *, 8> Elements;
+  for (const auto *Element : DIElements) {
+    if (Element->getTag() == dwarf::DW_TAG_member ||
+        Element->getTag() == dwarf::DW_TAG_variant_part)
+      Elements.push_back(Element);
+  }
   // Structure elements must have nondecreasing offsets in BTF. Preserve DI
   // order for union and variant-part records.
   if (CTy->getTag() == dwarf::DW_TAG_structure_type)
@@ -1035,7 +1041,8 @@ void BTFDebug::visitStructType(const DICompositeType *CTy, bool IsStruct,
       break;
     }
     default:
-      llvm_unreachable("Unexpected DI tag of a struct/union element");
+      // Skip C++ elements like methods, inheritance, template params.
+      continue;
     }
     FieldNo++;
   }
@@ -1127,13 +1134,15 @@ void BTFDebug::visitCompositeType(const DICompositeType *CTy,
   auto Tag = CTy->getTag();
   switch (Tag) {
   case dwarf::DW_TAG_structure_type:
+  case dwarf::DW_TAG_class_type:
   case dwarf::DW_TAG_union_type:
   case dwarf::DW_TAG_variant_part:
     // Handle forward declaration differently as it does not have members.
     if (CTy->isForwardDecl())
       visitFwdDeclType(CTy, Tag == dwarf::DW_TAG_union_type, TypeId);
     else
-      visitStructType(CTy, Tag == dwarf::DW_TAG_structure_type, TypeId);
+      visitStructType(CTy, Tag == dwarf::DW_TAG_structure_type ||
+                           Tag == dwarf::DW_TAG_class_type, TypeId);
     break;
   case dwarf::DW_TAG_array_type:
     visitArrayType(CTy, TypeId);
@@ -1150,7 +1159,8 @@ bool BTFDebug::IsForwardDeclCandidate(const DIType *Base) {
   if (const auto *CTy = dyn_cast<DICompositeType>(Base)) {
     auto CTag = CTy->getTag();
     if ((CTag == dwarf::DW_TAG_structure_type ||
-         CTag == dwarf::DW_TAG_union_type) &&
+         CTag == dwarf::DW_TAG_union_type ||
+         CTag == dwarf::DW_TAG_class_type) &&
         !CTy->getName().empty() && !CTy->isForwardDecl())
       return true;
   }
@@ -1323,11 +1333,14 @@ void BTFDebug::visitMapDefType(const DIType *Ty, uint32_t &TypeId) {
     // Visit nested map array and jump to the element type
     visitMapDefType(dyn_cast<DICompositeType>(Ty)->getBaseType(), TmpId);
     break;
-  case dwarf::DW_TAG_structure_type: {
+  case dwarf::DW_TAG_structure_type:
+  case dwarf::DW_TAG_class_type: {
     // Visit all struct members to ensure their types are visited.
     const auto *CTy = cast<DICompositeType>(Ty);
     const DINodeArray Elements = CTy->getElements();
     for (const auto *Element : Elements) {
+      if (Element->getTag() != dwarf::DW_TAG_member)
+        continue;
       const auto *MemberType = cast<DIDerivedType>(Element);
       const DIType *MemberBaseType = MemberType->getBaseType();
       // If the member is a composite type, that may indicate the currently
