@@ -172,9 +172,13 @@ void SemaBPF::handlePreserveAIRecord(RecordDecl *RD) {
     if (D->hasAttr<BPFPreserveAccessIndexAttr>())
       continue;
 
-    D->addAttr(BPFPreserveAccessIndexAttr::CreateImplicit(getASTContext()));
-    if (auto *Rec = dyn_cast<RecordDecl>(D))
+    if (auto *Rec = dyn_cast<RecordDecl>(D)) {
+      Rec->addAttr(BPFPreserveAccessIndexAttr::CreateImplicit(getASTContext()));
       handlePreserveAIRecord(Rec);
+    } else if (isa<FieldDecl>(D)) {
+      D->addAttr(BPFPreserveAccessIndexAttr::CreateImplicit(getASTContext()));
+    }
+    // Skip methods, access specifiers, friends, etc.
   }
 }
 
