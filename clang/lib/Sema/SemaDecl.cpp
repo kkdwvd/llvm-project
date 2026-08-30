@@ -14779,8 +14779,11 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl) {
         Diag(Var->getLocation(), diag::note_private_extern);
       }
 
+      // Class-scoped static data member declarations are not external
+      // (ksym-style) references; emitting them as external variables would
+      // give the debug-info global a type scope, which DIBuilder rejects.
       if (Context.getTargetInfo().allowDebugInfoForExternalRef() &&
-          !Var->isInvalidDecl())
+          !Var->isStaticDataMember() && !Var->isInvalidDecl())
         ExternalDeclarations.push_back(Var);
 
       return;
