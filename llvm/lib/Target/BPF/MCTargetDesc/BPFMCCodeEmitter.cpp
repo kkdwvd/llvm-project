@@ -103,7 +103,13 @@ unsigned BPFMCCodeEmitter::getMachineOpValue(const MCInst &MI,
 
   const MCExpr *Expr = MO.getExpr();
 
-  assert(Expr->getKind() == MCExpr::SymbolRef);
+  // A 64-bit immediate load may name a symbol plus a constant offset, as in
+  // "r1 = tbl + 8 ll". The fixup machinery folds the offset into the value
+  // written to the instruction and relocates the symbol. Every other symbolic
+  // operand must be a bare symbol reference.
+  assert(Expr->getKind() == MCExpr::SymbolRef ||
+         (MI.getOpcode() == BPF::LD_imm64 &&
+          Expr->getKind() == MCExpr::Binary));
 
   if (MI.getOpcode() == BPF::JAL)
     // func call name
