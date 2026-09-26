@@ -7298,27 +7298,12 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
     }
 
     // The cast takes the value as a 64-bit integer; the record type of the
-    // second argument names the typed arena, as a local BTF type ID that
-    // BPFPreserveDIType resolves from the attached debug type.
+    // second argument names the typed arena.
     const Expr *ValArg = E->getArg(0);
-    Value *Val = EmitScalarExpr(ValArg);
-    if (Val->getType()->isPointerTy())
-      Val = Builder.CreatePtrToInt(Val, Int64Ty);
-    else
-      Val = Builder.CreateIntCast(Val, Int64Ty,
-                                  ValArg->getType()->isSignedIntegerType());
-
     const Expr *TypeArg = E->getArg(1);
-    llvm::DIType *DbgInfo = getDebugInfo()->getOrCreateStandaloneType(
-        TypeArg->getType(), TypeArg->getExprLoc());
-    Value *TypeIdPlaceholder = llvm::ConstantPointerNull::get(
-        llvm::PointerType::getUnqual(getLLVMContext()));
-
-    llvm::Function *FnDecl = Intrinsic::getOrInsertDeclaration(
-        &CGM.getModule(), Intrinsic::bpf_typed_arena_cast, {});
-    CallInst *Fn = Builder.CreateCall(FnDecl, {Val, TypeIdPlaceholder});
-    Fn->setMetadata(LLVMContext::MD_preserve_access_index, DbgInfo);
-    return Fn;
+    return EmitBPFTypedArenaCast(EmitScalarExpr(ValArg), TypeArg->getType(),
+                                 TypeArg->getExprLoc(),
+                                 ValArg->getType()->isSignedIntegerType());
   }
   case BPF::BI__builtin_preserve_enum_value: {
     if (!getDebugInfo()) {

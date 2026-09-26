@@ -6,6 +6,7 @@
 // RUN: %clang -E -target bpfel -mcpu=v4 -x c -o - %s | FileCheck -check-prefix=CHECK -check-prefix=CPU_V4 %s
 // RUN: %clang -E -target bpfel -mcpu=generic -x c -o - %s | FileCheck -check-prefix=CHECK -check-prefix=CPU_GENERIC %s
 // RUN: %clang -E -target bpfel -mcpu=probe -x c -o - %s | FileCheck -check-prefix=CHECK -check-prefix=CPU_PROBE %s
+// RUN: %clang -E -target bpfel -mcpu=v3 -Xclang -target-feature -Xclang +typed-arena -x c -o - %s | FileCheck -check-prefix=CHECK -check-prefix=TYPED_ARENA %s
 
 #ifdef __bpf__
 int b;
@@ -134,10 +135,11 @@ int z;
 // CPU_V3: int y;
 // CPU_V4: int y;
 
-// CPU_V1: int z;
-// CPU_V2: int z;
-// CPU_V3: int z;
-// CPU_V4: int z;
+// CPU_V1-NOT: int z;
+// CPU_V2-NOT: int z;
+// CPU_V3-NOT: int z;
+// CPU_V4-NOT: int z;
+// TYPED_ARENA: int z;
 
 // CPU_GENERIC: int g;
 

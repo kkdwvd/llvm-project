@@ -714,6 +714,10 @@ private:
 
   llvm::DenseMap<GlobalDecl, uint16_t> PtrAuthDiscriminatorHashes;
 
+  /// BPF: records with special fields, or reaching them through plain
+  /// pointer members or embedding; see isBPFTypedRecord().
+  llvm::DenseMap<const RecordDecl *, bool> BPFTypedRecords;
+
   llvm::DenseMap<const CXXRecordDecl *, std::optional<PointerAuthQualifier>>
       VTablePtrAuthInfos;
   std::optional<PointerAuthQualifier>
@@ -895,6 +899,11 @@ public:
   }
 
   ASTContext &getContext() const { return Context; }
+
+  /// BPF: whether objects of the record live in a typed arena, that is,
+  /// whether it has a special field or reaches one through plain pointer
+  /// members or embedded records.
+  bool isBPFTypedRecord(const RecordDecl *RD);
   const LangOptions &getLangOpts() const { return LangOpts; }
   const IntrusiveRefCntPtr<llvm::vfs::FileSystem> &getFileSystem() const {
     return FS;

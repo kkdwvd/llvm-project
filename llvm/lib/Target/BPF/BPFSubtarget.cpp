@@ -61,6 +61,7 @@ void BPFSubtarget::initializeEnvironment() {
   HasJmp32 = false;
   HasAlu32 = false;
   UseDwarfRIS = false;
+  HasTypedArena = false;
   HasLdsx = false;
   HasMovsx = false;
   HasBswap = false;

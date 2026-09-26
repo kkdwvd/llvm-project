@@ -63,6 +63,9 @@ protected:
   // whether we should enable MCAsmInfo DwarfUsesRelocationsAcrossSections
   bool UseDwarfRIS;
 
+  // The compiler inserts typed_arena_cast where pointers to typed records are used
+  bool HasTypedArena;
+
   // whether we allows misaligned memory access
   bool AllowsMisalignedMemAccess;
 
@@ -90,6 +93,7 @@ public:
   bool getHasJmp32() const { return HasJmp32; }
   bool getHasAlu32() const { return HasAlu32; }
   bool getUseDwarfRIS() const { return UseDwarfRIS; }
+  bool getHasTypedArena() const { return HasTypedArena; }
   bool getAllowsMisalignedMemAccess() const {
     return AllowsMisalignedMemAccess;
   }

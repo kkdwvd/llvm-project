@@ -23,6 +23,7 @@ namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY BPFTargetInfo : public TargetInfo {
   bool HasAlu32 = false;
+  bool HasTypedArena = false;
 
 public:
   BPFTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
@@ -44,6 +45,8 @@ public:
                         MacroBuilder &Builder) const override;
 
   bool hasFeature(StringRef Feature) const override {
+    if (Feature == "typed-arena")
+      return HasTypedArena;
     return Feature == "bpf" || Feature == "alu32" || Feature == "dwarfris";
   }
 

@@ -44,7 +44,8 @@ void BPFTargetInfo::getTargetDefines(const LangOptions &Opts,
   }
 
   Builder.defineMacro("__BPF_FEATURE_ADDR_SPACE_CAST");
-  Builder.defineMacro("__BPF_FEATURE_TYPED_ARENA_CAST");
+  if (HasTypedArena)
+    Builder.defineMacro("__BPF_FEATURE_TYPED_ARENA_CAST");
   Builder.defineMacro("__BPF_FEATURE_MAY_GOTO");
   Builder.defineMacro("__BPF_FEATURE_ATOMIC_MEM_ORDERING");
   Builder.defineMacro("__BPF_FEATURE_STACK_ARGUMENT");
@@ -102,6 +103,8 @@ bool BPFTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   for (const auto &Feature : Features) {
     if (Feature == "+alu32") {
       HasAlu32 = true;
+    } else if (Feature == "+typed-arena") {
+      HasTypedArena = true;
     }
   }
 

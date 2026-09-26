@@ -5023,6 +5023,17 @@ public:
                                       llvm::Triple::ArchType Arch);
   llvm::Value *EmitBPFBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
 
+  /// BPF typed arena casts: emitted for __builtin_bpf_typed_arena_cast, and
+  /// inserted where a pointer to a typed record is used when the typed-arena
+  /// target feature is on.
+  bool insertsBPFTypedArenaCasts();
+  llvm::Value *EmitBPFTypedArenaCast(llvm::Value *Val, QualType RecordTy,
+                                     SourceLocation Loc,
+                                     bool ValIsSigned = false);
+  void EmitBPFTypedArenaUseCast(const Expr *E, Address &Addr);
+  llvm::Value *EmitBPFTypedArenaConversionCast(const CastExpr *CE,
+                                               llvm::Value *V);
+
   llvm::Value *BuildVector(ArrayRef<llvm::Value *> Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitPPCBuiltinCpu(unsigned BuiltinID, llvm::Type *ReturnType,

@@ -678,6 +678,7 @@ public:
     return VisitCastExpr(E);
   }
   Value *VisitCastExpr(CastExpr *E);
+  Value *EmitCastExpr(CastExpr *E);
 
   Value *VisitCallExpr(const CallExpr *E) {
     if (E->getCallReturnType(CGF.getContext())->isReferenceType())
@@ -2619,6 +2620,13 @@ static Value *EmitHLSLElementwiseCast(CodeGenFunction &CGF, LValue SrcVal,
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
 Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
+  Value *V = EmitCastExpr(CE);
+  // A BPF conversion to a pointer to a typed record from anything else is
+  // where a value enters the typed arena world.
+  return CGF.EmitBPFTypedArenaConversionCast(CE, V);
+}
+
+Value *ScalarExprEmitter::EmitCastExpr(CastExpr *CE) {
   llvm::scope_exit RestoreCurCast(
       [this, Prev = CGF.CurCast] { CGF.CurCast = Prev; });
   CGF.CurCast = CE;

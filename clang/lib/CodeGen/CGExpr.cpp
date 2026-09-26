@@ -47,6 +47,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsBPF.h"
 #include "llvm/IR/IntrinsicsWebAssembly.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
@@ -1438,6 +1439,239 @@ static CharUnits getArrayElementAlign(CharUnits arrayAlign, llvm::Value *idx,
   return arrayAlign.alignmentOfArrayElement(eltSize);
 }
 
+//===----------------------------------------------------------------------===//
+//                         BPF typed arena pointers
+//===----------------------------------------------------------------------===//
+
+// Whether the type carries one of the btf_type_tag attributes, at any level
+// of sugar above its canonical type.
+static bool hasBPFTypeTag(QualType Ty, llvm::ArrayRef<llvm::StringRef> Tags) {
+  const Type *T = Ty.getTypePtr();
+  for (;;) {
+    if (const auto *BTFTy = dyn_cast<BTFTagAttributedType>(T)) {
+      if (llvm::is_contained(Tags, BTFTy->getAttr()->getBTFTypeTag()))
+        return true;
+      T = BTFTy->getWrappedType().getTypePtr();
+      continue;
+    }
+    const Type *Desugared =
+        T->getLocallyUnqualifiedSingleStepDesugaredType().getTypePtr();
+    if (Desugared == T)
+      return false;
+    T = Desugared;
+  }
+}
+
+static const llvm::StringRef BPFKptrTags[] = {"kptr", "kptr_untrusted",
+                                              "percpu_kptr"};
+static const llvm::StringRef BPFUptrTags[] = {"uptr"};
+
+// The definition of the record a type denotes, or null.
+static const RecordDecl *getBPFRecordDefinition(QualType Ty) {
+  const auto *RT = Ty->getAs<RecordType>();
+  return RT ? RT->getDecl()->getDefinition() : nullptr;
+}
+
+// A pointer in the default address space to a record, without a kptr or uptr
+// tag: the kind of pointer a typed arena object is reached through. Returns
+// the pointee's definition, or null for any other type.
+static const RecordDecl *getBPFPlainRecordPointee(ASTContext &Ctx,
+                                                  QualType Ty) {
+  if (!Ty->isPointerType())
+    return nullptr;
+  QualType Pointee = Ty->getPointeeType();
+  if (hasBPFTypeTag(Pointee, BPFKptrTags) ||
+      hasBPFTypeTag(Pointee, BPFUptrTags))
+    return nullptr;
+  if (Ctx.getTargetAddressSpace(Pointee.getAddressSpace()) != 0)
+    return nullptr;
+  return getBPFRecordDefinition(Pointee);
+}
+
+// The kernel's special record types: a member of one makes a record special.
+static bool isBPFSpecialRecordName(llvm::StringRef Name) {
+  static const llvm::StringRef Names[] = {
+      "bpf_spin_lock", "bpf_res_spin_lock", "bpf_list_head", "bpf_list_node",
+      "bpf_rb_root",   "bpf_rb_node",       "bpf_refcount",  "bpf_timer",
+      "bpf_wq",        "bpf_task_work",     "bpf_rcu_head"};
+  return llvm::is_contained(Names, Name);
+}
+
+// Classify a field for the typed record closure: a kptr-tagged pointer or a
+// member of a special record type makes the record special by itself, while
+// a plain pointer to a record or an embedded record makes it typed when that
+// record is typed.
+static void classifyBPFField(ASTContext &Ctx, QualType Ty, bool &Special,
+                             SmallVectorImpl<const RecordDecl *> &Deps) {
+  if (const ArrayType *AT = Ctx.getAsArrayType(Ty))
+    return classifyBPFField(Ctx, AT->getElementType(), Special, Deps);
+  if (Ty->isPointerType()) {
+    if (hasBPFTypeTag(Ty->getPointeeType(), BPFKptrTags))
+      Special = true;
+    else if (const RecordDecl *RD = getBPFPlainRecordPointee(Ctx, Ty))
+      Deps.push_back(RD);
+    return;
+  }
+  if (const RecordDecl *RD = getBPFRecordDefinition(Ty)) {
+    if (isBPFSpecialRecordName(RD->getName()))
+      Special = true;
+    else
+      Deps.push_back(RD);
+  }
+}
+
+bool CodeGenModule::isBPFTypedRecord(const RecordDecl *RD) {
+  RD = RD ? RD->getDefinition() : nullptr;
+  if (!RD)
+    return false;
+  auto Known = BPFTypedRecords.find(RD);
+  if (Known != BPFTypedRecords.end())
+    return Known->second;
+
+  // The kernel decides the same way: a record is typed when it has a special
+  // field, or when a plain pointer member or an embedded record leads to a
+  // typed record, to any depth. Walk the records reachable from RD, then
+  // propagate until nothing changes, so that a cycle of records with no
+  // special field anywhere stays untyped while one that reaches a special
+  // field anywhere becomes typed as a whole. A record with a known answer
+  // ends the walk.
+  struct Node {
+    bool Typed = false;
+    SmallVector<unsigned, 4> Deps;
+  };
+  SmallVector<const RecordDecl *, 8> Records;
+  SmallVector<Node, 8> Nodes;
+  llvm::DenseMap<const RecordDecl *, unsigned> Index;
+  auto Visit = [&](const RecordDecl *R) {
+    auto It = Index.find(R);
+    if (It != Index.end())
+      return It->second;
+    unsigned I = Records.size();
+    Index[R] = I;
+    Records.push_back(R);
+    Nodes.emplace_back();
+    return I;
+  };
+  Visit(RD);
+  for (unsigned I = 0; I < Records.size(); ++I) {
+    SmallVector<const RecordDecl *, 8> Deps;
+    bool Special = false;
+    for (const FieldDecl *FD : Records[I]->fields())
+      classifyBPFField(getContext(), FD->getType(), Special, Deps);
+    Nodes[I].Typed = Special;
+    for (const RecordDecl *D : Deps) {
+      auto Cached = BPFTypedRecords.find(D);
+      if (Cached != BPFTypedRecords.end()) {
+        if (Cached->second)
+          Nodes[I].Typed = true;
+        continue;
+      }
+      unsigned J = Visit(D);
+      Nodes[I].Deps.push_back(J);
+    }
+  }
+  for (bool Changed = true; Changed;) {
+    Changed = false;
+    for (Node &N : Nodes) {
+      if (N.Typed)
+        continue;
+      for (unsigned D : N.Deps) {
+        if (Nodes[D].Typed) {
+          N.Typed = Changed = true;
+          break;
+        }
+      }
+    }
+  }
+  for (unsigned I = 0; I < Records.size(); ++I)
+    BPFTypedRecords[Records[I]] = Nodes[I].Typed;
+  return Nodes[0].Typed;
+}
+
+// Whether a typed arena cast already produced the pointer.
+static bool isBPFTypedArenaCastResult(llvm::Value *V) {
+  V = V->stripPointerCasts();
+  if (auto *Call = dyn_cast<llvm::CallInst>(V))
+    if (llvm::Function *Callee = Call->getCalledFunction())
+      return Callee->getIntrinsicID() == llvm::Intrinsic::bpf_typed_arena_cast;
+  return false;
+}
+
+bool CodeGenFunction::insertsBPFTypedArenaCasts() {
+  // Without debug information there is no record to name the cast with.
+  return getTarget().getTriple().isBPF() &&
+         getTarget().hasFeature("typed-arena") && getDebugInfo();
+}
+
+// Sanitize a value into a pointer to a typed arena object of RecordTy. The
+// value goes through the intrinsic as a 64-bit integer, and the record's
+// debug type rides along so that BPFPreserveDIType can turn it into the
+// local BTF type ID the instruction carries.
+llvm::Value *CodeGenFunction::EmitBPFTypedArenaCast(llvm::Value *Val,
+                                                    QualType RecordTy,
+                                                    SourceLocation Loc,
+                                                    bool ValIsSigned) {
+  if (Val->getType()->isPointerTy())
+    Val = Builder.CreatePtrToInt(Val, Int64Ty);
+  else
+    Val = Builder.CreateIntCast(Val, Int64Ty, ValIsSigned);
+
+  llvm::DIType *DbgInfo =
+      getDebugInfo()->getOrCreateStandaloneType(RecordTy, Loc);
+  llvm::Value *TypeIdPlaceholder = llvm::ConstantPointerNull::get(
+      llvm::PointerType::getUnqual(getLLVMContext()));
+  llvm::Function *Fn = llvm::Intrinsic::getOrInsertDeclaration(
+      &CGM.getModule(), llvm::Intrinsic::bpf_typed_arena_cast, {});
+  llvm::CallInst *Call = Builder.CreateCall(Fn, {Val, TypeIdPlaceholder});
+  Call->setMetadata(llvm::LLVMContext::MD_preserve_access_index, DbgInfo);
+  return Call;
+}
+
+// A pointer to a typed record is about to serve as an address: cast it first,
+// unless a cast produced it. The verifier makes the cast free where the value
+// is already trusted, so nothing here needs to know where the pointer came
+// from.
+void CodeGenFunction::EmitBPFTypedArenaUseCast(const Expr *E, Address &Addr) {
+  if (!insertsBPFTypedArenaCasts() || Addr.getAddressSpace() != 0)
+    return;
+  const RecordDecl *RD = getBPFPlainRecordPointee(getContext(), E->getType());
+  if (!RD || !CGM.isBPFTypedRecord(RD))
+    return;
+  llvm::Value *Ptr = Addr.emitRawPointer(*this);
+  if (isBPFTypedArenaCastResult(Ptr))
+    return;
+  Addr.replaceBasePointer(EmitBPFTypedArenaCast(
+      Ptr, getContext().getCanonicalTagType(RD), E->getExprLoc()));
+}
+
+// A conversion to a pointer to a typed record from anything but such a
+// pointer to the same record is where a value enters: an integer, a raw arena
+// pointer, a void pointer or a pointer to another struct. A constant stays
+// what it is: a typed pointer field takes NULL as it is, and a cast would
+// turn it into object 0 of the slice; a dereference of a constant is cast at
+// the use anyway. A value a cast produced is not cast again.
+llvm::Value *
+CodeGenFunction::EmitBPFTypedArenaConversionCast(const CastExpr *CE,
+                                                 llvm::Value *V) {
+  if (!V || !insertsBPFTypedArenaCasts())
+    return V;
+  const RecordDecl *RD = getBPFPlainRecordPointee(getContext(), CE->getType());
+  if (!RD || !CGM.isBPFTypedRecord(RD))
+    return V;
+  const Expr *Src = CE->getSubExpr();
+  if (getBPFPlainRecordPointee(getContext(), Src->getType()) == RD)
+    return V;
+  if (Src->isNullPointerConstant(getContext(),
+                                 Expr::NPC_ValueDependentIsNotNull) !=
+          Expr::NPCK_NotNull ||
+      Src->isIntegerConstantExpr(getContext()))
+    return V;
+  if (isBPFTypedArenaCastResult(V))
+    return V;
+  return EmitBPFTypedArenaCast(V, getContext().getCanonicalTagType(RD),
+                               CE->getExprLoc());
+}
+
 /// Emit pointer + index arithmetic.
 static Address emitPointerArithmetic(CodeGenFunction &CGF,
                                      const BinaryOperator *BO,
@@ -1620,6 +1854,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(
     KnownNonNull_t IsKnownNonNull) {
   Address Addr =
       ::EmitPointerWithAlignment(E, BaseInfo, TBAAInfo, IsKnownNonNull, *this);
+  EmitBPFTypedArenaUseCast(E, Addr);
   if (IsKnownNonNull && !Addr.isKnownNonNull())
     Addr.setKnownNonNull();
   return Addr;

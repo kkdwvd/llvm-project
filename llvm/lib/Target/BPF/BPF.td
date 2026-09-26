@@ -30,6 +30,9 @@ def ALU32 : SubtargetFeature<"alu32", "HasAlu32", "true",
 def DwarfRIS: SubtargetFeature<"dwarfris", "UseDwarfRIS", "true",
                                "Disable MCAsmInfo DwarfUsesRelocationsAcrossSections">;
 
+def TypedArena : SubtargetFeature<"typed-arena", "HasTypedArena", "true",
+                                  "Insert typed_arena_cast where pointers to typed records are used">;
+
 def MisalignedMemAccess : SubtargetFeature<"allows-misaligned-mem-access",
                                            "AllowsMisalignedMemAccess", "true",
                                            "Allows misaligned memory access">;
