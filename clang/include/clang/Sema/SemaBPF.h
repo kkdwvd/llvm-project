@@ -24,6 +24,7 @@ public:
   SemaBPF(Sema &S);
 
   bool CheckBPFBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
+  bool CheckTypedArenaCast(CallExpr *TheCall);
 
   void handlePreserveAIRecord(RecordDecl *RD);
   void handlePreserveAccessIndexAttr(Decl *D, const ParsedAttr &AL);

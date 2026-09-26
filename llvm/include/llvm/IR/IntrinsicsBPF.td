@@ -29,6 +29,10 @@ let TargetPrefix = "bpf" in {  // All intrinsics start with "llvm.bpf."
   def int_bpf_preserve_type_info : ClangBuiltin<"__builtin_bpf_preserve_type_info">,
               Intrinsic<[llvm_i32_ty], [llvm_i32_ty, llvm_i64_ty],
               [IntrNoMem]>;
+  // (value, type ID global): a pointer to the typed arena object the value names
+  def int_bpf_typed_arena_cast : DefaultAttrsIntrinsic<
+              [llvm_ptr_ty], [llvm_i64_ty, llvm_ptr_ty],
+              [IntrNoMem, IntrWillReturn]>;
   def int_bpf_preserve_enum_value : ClangBuiltin<"__builtin_bpf_preserve_enum_value">,
               Intrinsic<[llvm_i64_ty], [llvm_i32_ty, llvm_ptr_ty, llvm_i64_ty],
               [IntrNoMem]>;

@@ -7226,7 +7226,8 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
   assert((BuiltinID == BPF::BI__builtin_preserve_field_info ||
           BuiltinID == BPF::BI__builtin_btf_type_id ||
           BuiltinID == BPF::BI__builtin_preserve_type_info ||
-          BuiltinID == BPF::BI__builtin_preserve_enum_value) &&
+          BuiltinID == BPF::BI__builtin_preserve_enum_value ||
+          BuiltinID == BPF::BI__builtin_bpf_typed_arena_cast) &&
          "unexpected BPF builtin");
 
   // A sequence number, injected into IR builtin functions, to
@@ -7287,6 +7288,35 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
       FnDecl = Intrinsic::getOrInsertDeclaration(
           &CGM.getModule(), Intrinsic::bpf_preserve_type_info, {});
     CallInst *Fn = Builder.CreateCall(FnDecl, {SeqNumVal, FlagValue});
+    Fn->setMetadata(LLVMContext::MD_preserve_access_index, DbgInfo);
+    return Fn;
+  }
+  case BPF::BI__builtin_bpf_typed_arena_cast: {
+    if (!getDebugInfo()) {
+      CGM.Error(E->getExprLoc(), "using builtin function without -g");
+      return nullptr;
+    }
+
+    // The cast takes the value as a 64-bit integer; the record type of the
+    // second argument names the typed arena, as a local BTF type ID that
+    // BPFPreserveDIType resolves from the attached debug type.
+    const Expr *ValArg = E->getArg(0);
+    Value *Val = EmitScalarExpr(ValArg);
+    if (Val->getType()->isPointerTy())
+      Val = Builder.CreatePtrToInt(Val, Int64Ty);
+    else
+      Val = Builder.CreateIntCast(Val, Int64Ty,
+                                  ValArg->getType()->isSignedIntegerType());
+
+    const Expr *TypeArg = E->getArg(1);
+    llvm::DIType *DbgInfo = getDebugInfo()->getOrCreateStandaloneType(
+        TypeArg->getType(), TypeArg->getExprLoc());
+    Value *TypeIdPlaceholder = llvm::ConstantPointerNull::get(
+        llvm::PointerType::getUnqual(getLLVMContext()));
+
+    llvm::Function *FnDecl = Intrinsic::getOrInsertDeclaration(
+        &CGM.getModule(), Intrinsic::bpf_typed_arena_cast, {});
+    CallInst *Fn = Builder.CreateCall(FnDecl, {Val, TypeIdPlaceholder});
     Fn->setMetadata(LLVMContext::MD_preserve_access_index, DbgInfo);
     return Fn;
   }

@@ -13506,6 +13506,9 @@ def err_preserve_enum_value_invalid : Error<
   "__builtin_preserve_enum_value argument %0 invalid">;
 def err_preserve_enum_value_not_const: Error<
   "__builtin_preserve_enum_value argument %0 not a constant">;
+def err_typed_arena_cast_invalid : Error<
+  "__builtin_bpf_typed_arena_cast argument %0 "
+  "%select{is not a pointer or integer|is not a struct or union}1">;
 
 def err_bit_cast_non_trivially_copyable : Error<
   "'__builtin_bit_cast' %select{source|destination}0 type must be trivially copyable">;

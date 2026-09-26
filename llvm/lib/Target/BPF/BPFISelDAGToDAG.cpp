@@ -193,6 +193,26 @@ void BPFDAGToDAGISel::Select(SDNode *Node) {
   switch (Opcode) {
   default:
     break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    unsigned IntNo = Node->getConstantOperandVal(0);
+    if (IntNo != Intrinsic::bpf_typed_arena_cast)
+      break;
+
+    // The type ID operand is the address of the global that
+    // BPFPreserveDIType created for the record; BTFDebug patches its
+    // relocated ID into the instruction.
+    SDValue TypeId = Node->getOperand(2);
+    if (!TypeId->isMachineOpcode() ||
+        TypeId->getMachineOpcode() != BPF::LDIMM64)
+      report_fatal_error("typed_arena_cast requires a BTF type ID global");
+    SDValue TypeIdGlobal = TypeId->getOperand(0);
+    if (!isa<GlobalAddressSDNode>(TypeIdGlobal))
+      report_fatal_error("typed_arena_cast requires a BTF type ID global");
+
+    CurDAG->SelectNodeTo(Node, BPF::TYPED_ARENA_CAST, MVT::i64,
+                         Node->getOperand(1), TypeIdGlobal);
+    return;
+  }
   case BPFISD::LOAD_STACK_ARG: {
     SDValue Chain = Node->getOperand(0);
     auto *CN = cast<ConstantSDNode>(Node->getOperand(1));

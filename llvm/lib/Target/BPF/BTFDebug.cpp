@@ -1774,6 +1774,9 @@ void BTFDebug::beginInstruction(const MachineInstr *MI) {
     // If the insn is "r2 = LD_imm64 @<an TypeIdAttr global>",
     // The LD_imm64 result will be replaced with a btf type id.
     processGlobalValue(MI->getOperand(1));
+  } else if (MI->getOpcode() == BPF::TYPED_ARENA_CAST) {
+    // The type ID global of a typed arena cast is patched into its imm.
+    processGlobalValue(MI->getOperand(2));
   } else if (MI->getOpcode() == BPF::CORE_LD64 ||
              MI->getOpcode() == BPF::CORE_LD32 ||
              MI->getOpcode() == BPF::CORE_ST ||
@@ -1948,6 +1951,24 @@ void BTFDebug::processGlobalInitializer(const Constant *C) {
 
 /// Emit proper patchable instructions.
 bool BTFDebug::InstLower(const MachineInstr *MI, MCInst &OutMI) {
+  if (MI->getOpcode() == BPF::TYPED_ARENA_CAST) {
+    const MachineOperand &MO = MI->getOperand(2);
+    const auto *GVar =
+        MO.isGlobal() ? dyn_cast<GlobalVariable>(MO.getGlobal()) : nullptr;
+    if (!GVar || !GVar->hasAttribute(BPFCoreSharedInfo::TypeIdAttr))
+      return false;
+
+    auto [Imm, Reloc] = PatchImms[GVar];
+    if (Reloc != BTF::BTF_TYPE_ID_LOCAL)
+      return false;
+
+    OutMI.setOpcode(BPF::TYPED_ARENA_CAST_IMM);
+    OutMI.addOperand(MCOperand::createReg(MI->getOperand(0).getReg()));
+    OutMI.addOperand(MCOperand::createReg(MI->getOperand(1).getReg()));
+    OutMI.addOperand(MCOperand::createImm(Imm));
+    return true;
+  }
+
   if (MI->getOpcode() == BPF::LD_imm64) {
     const MachineOperand &MO = MI->getOperand(1);
     if (MO.isGlobal()) {

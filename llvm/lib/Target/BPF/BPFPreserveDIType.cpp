@@ -6,12 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Preserve Debuginfo types encoded in __builtin_btf_type_id() metadata.
+// Preserve Debuginfo types encoded in __builtin_btf_type_id() and
+// __builtin_bpf_typed_arena_cast() metadata.
 //
 //===----------------------------------------------------------------------===//
 
 #include "BPF.h"
 #include "BPFCORE.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/BTF/BTF.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -41,6 +43,7 @@ static bool BPFPreserveDITypeImpl(Function &F) {
     return false;
 
   std::vector<CallInst *> PreserveDITypeCalls;
+  std::vector<CallInst *> TypedArenaCastCalls;
 
   for (auto &BB : F) {
     for (auto &I : BB) {
@@ -57,11 +60,16 @@ static bool BPFPreserveDITypeImpl(Function &F) {
           report_fatal_error(
               "Missing metadata for llvm.bpf.btf.type.id intrinsic");
         PreserveDITypeCalls.push_back(Call);
+      } else if (GV->getName().starts_with("llvm.bpf.typed.arena.cast")) {
+        if (!Call->getMetadata(LLVMContext::MD_preserve_access_index))
+          report_fatal_error(
+              "Missing metadata for llvm.bpf.typed.arena.cast intrinsic");
+        TypedArenaCastCalls.push_back(Call);
       }
     }
   }
 
-  if (PreserveDITypeCalls.empty())
+  if (PreserveDITypeCalls.empty() && TypedArenaCastCalls.empty())
     return false;
 
   std::string BaseName = "llvm.btf_type_id.";
@@ -109,6 +117,35 @@ static bool BPFPreserveDITypeImpl(Function &F) {
     Call->replaceAllUsesWith(PassThroughInst);
     Call->eraseFromParent();
     Count++;
+  }
+
+  // A typed arena cast keeps its call; its type ID operand becomes a global
+  // carrying the local type ID relocation, one per record type in the
+  // function, so that casts of one value to one type can be merged and casts
+  // to different types cannot.
+  DenseMap<MDNode *, GlobalVariable *> TypedArenaGlobals;
+  for (auto *Call : TypedArenaCastCalls) {
+    MDNode *MD = Call->getMetadata(LLVMContext::MD_preserve_access_index);
+    DIType *Ty = cast<DIType>(MD);
+    while (auto *DTy = dyn_cast<DIDerivedType>(Ty)) {
+      unsigned Tag = DTy->getTag();
+      if (Tag != dwarf::DW_TAG_const_type && Tag != dwarf::DW_TAG_volatile_type)
+        break;
+      Ty = DTy->getBaseType();
+    }
+
+    GlobalVariable *&GV = TypedArenaGlobals[Ty];
+    if (!GV) {
+      IntegerType *VarType = Type::getInt64Ty(F.getContext());
+      std::string GVName = BaseName + std::to_string(Count) + "$" +
+                           std::to_string(BTF::BTF_TYPE_ID_LOCAL);
+      GV = new GlobalVariable(*M, VarType, false,
+                              GlobalVariable::ExternalLinkage, nullptr, GVName);
+      GV->addAttribute(BPFCoreSharedInfo::TypeIdAttr);
+      GV->setMetadata(LLVMContext::MD_preserve_access_index, Ty);
+      Count++;
+    }
+    Call->setArgOperand(1, GV);
   }
 
   return true;

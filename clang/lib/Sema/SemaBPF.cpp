@@ -102,13 +102,48 @@ static bool isValidPreserveEnumValueArg(Expr *Arg) {
   return llvm::is_contained(ED->enumerators(), Enumerator);
 }
 
+// __builtin_bpf_typed_arena_cast(<value>, *(<record type> *)0): the value is
+// any pointer or integer, the second argument only names the record type.
+bool SemaBPF::CheckTypedArenaCast(CallExpr *TheCall) {
+  ASTContext &Context = getASTContext();
+  if (SemaRef.checkArgCount(TheCall, 2))
+    return true;
+
+  ExprResult Val =
+      SemaRef.DefaultFunctionArrayLvalueConversion(TheCall->getArg(0));
+  if (Val.isInvalid())
+    return true;
+  TheCall->setArg(0, Val.get());
+  QualType ValTy = Val.get()->getType();
+  if (!ValTy->isPointerType() && !ValTy->isIntegerType()) {
+    Diag(Val.get()->getBeginLoc(), diag::err_typed_arena_cast_invalid)
+        << 1 << 0 << Val.get()->getSourceRange();
+    return true;
+  }
+
+  Expr *TypeArg = TheCall->getArg(1);
+  if (!isValidPreserveTypeInfoArg(TypeArg) ||
+      !TypeArg->getType()->isRecordType()) {
+    Diag(TypeArg->getBeginLoc(), diag::err_typed_arena_cast_invalid)
+        << 2 << 1 << TypeArg->getSourceRange();
+    return true;
+  }
+
+  TheCall->setType(Context.VoidPtrTy);
+  return false;
+}
+
 bool SemaBPF::CheckBPFBuiltinFunctionCall(unsigned BuiltinID,
                                           CallExpr *TheCall) {
   assert((BuiltinID == BPF::BI__builtin_preserve_field_info ||
           BuiltinID == BPF::BI__builtin_btf_type_id ||
           BuiltinID == BPF::BI__builtin_preserve_type_info ||
-          BuiltinID == BPF::BI__builtin_preserve_enum_value) &&
+          BuiltinID == BPF::BI__builtin_preserve_enum_value ||
+          BuiltinID == BPF::BI__builtin_bpf_typed_arena_cast) &&
          "unexpected BPF builtin");
+  if (BuiltinID == BPF::BI__builtin_bpf_typed_arena_cast)
+    return CheckTypedArenaCast(TheCall);
+
   ASTContext &Context = getASTContext();
   if (SemaRef.checkArgCount(TheCall, 2))
     return true;

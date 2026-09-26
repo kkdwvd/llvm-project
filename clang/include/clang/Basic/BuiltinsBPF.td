@@ -35,3 +35,10 @@ def PreserveEnumValue : TargetBuiltin {
   let Attributes = [CustomTypeChecking];
   let Prototype = "long int(...)";
 }
+
+// Sanitize a value into a pointer to a typed arena object
+def TypedArenaCast : TargetBuiltin {
+  let Spellings = ["__builtin_bpf_typed_arena_cast"];
+  let Attributes = [CustomTypeChecking];
+  let Prototype = "void*(...)";
+}

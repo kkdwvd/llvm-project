@@ -497,6 +497,26 @@ def ADDR_SPACE_CAST
   let Inst{15-0} = src_as{15-0};
 }
 
+// dst = typed_arena_cast(src, type_id): the value in src is masked into an
+// object of the struct with the local BTF type ID in imm, in the struct's
+// typed arena. The pseudo carries the type ID global until BTFDebug lowers
+// it to the encoded form with the relocated ID.
+def TYPED_ARENA_CAST
+    : Pseudo<(outs GPR:$dst), (ins GPR:$src, i64imm:$type_id),
+             "$dst = typed_arena_cast($src, $type_id)", []>;
+
+def TYPED_ARENA_CAST_IMM
+    : ALU_RR<BPF_ALU64, BPF_MOV, 64,
+             (outs GPR:$dst),
+             (ins GPR:$src, i64imm:$type_id),
+             "$dst = typed_arena_cast($src, $type_id)",
+             []> {
+  bits<64> type_id;
+
+  let Inst{47-32} = 2;
+  let Inst{31-0} = type_id{31-0};
+}
+
 def SrcAddrSpace : SDNodeXForm<addrspacecast, [{
   return CurDAG->getTargetConstant(
     cast<AddrSpaceCastSDNode>(N)->getSrcAddressSpace(),
