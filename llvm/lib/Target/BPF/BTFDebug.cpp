@@ -58,6 +58,14 @@ static const DIType *tryRemoveAtomicType(const DIType *Ty) {
   return Ty;
 }
 
+/// C++ references have no BTF kind of their own; they are pointers at the
+/// ABI level and are encoded as BTF_KIND_PTR.
+static bool isPointerLikeTag(unsigned Tag) {
+  return Tag == dwarf::DW_TAG_pointer_type ||
+         Tag == dwarf::DW_TAG_reference_type ||
+         Tag == dwarf::DW_TAG_rvalue_reference_type;
+}
+
 static const DIType *stripDITypeAttributes(const DIType *Ty) {
   while (const auto *DTy = dyn_cast_or_null<DIDerivedType>(Ty)) {
     switch (DTy->getTag()) {
@@ -81,7 +89,7 @@ static bool sourceArgMatchesIRType(const DIType *SourceTy, Type *IRTy) {
   // All pointers are opaque in LLVM IR, so any source-level pointer matches any
   // IR pointer regardless of pointee type.
   if (const auto *DTy = dyn_cast<DIDerivedType>(SourceTy))
-    return DTy->getTag() == dwarf::DW_TAG_pointer_type && IRTy->isPointerTy();
+    return isPointerLikeTag(DTy->getTag()) && IRTy->isPointerTy();
 
   if (const auto *BTy = dyn_cast<DIBasicType>(SourceTy)) {
     uint64_t SizeInBits = BTy->getSizeInBits();
@@ -267,6 +275,8 @@ BTFTypeDerived::BTFTypeDerived(const DIDerivedType *DTy, unsigned Tag,
     : DTy(DTy), NeedsFixup(NeedsFixup), Name(DTy->getName()) {
   switch (Tag) {
   case dwarf::DW_TAG_pointer_type:
+  case dwarf::DW_TAG_reference_type:
+  case dwarf::DW_TAG_rvalue_reference_type:
     Kind = BTF::BTF_KIND_PTR;
     break;
   case dwarf::DW_TAG_const_type:
@@ -287,12 +297,14 @@ BTFTypeDerived::BTFTypeDerived(const DIDerivedType *DTy, unsigned Tag,
   BTFType.Info = Kind << 24;
 }
 
-/// Used by DW_TAG_pointer_type and DW_TAG_typedef only.
+/// Used by pointer-like tags and DW_TAG_typedef only.
 BTFTypeDerived::BTFTypeDerived(unsigned NextTypeId, unsigned Tag,
                                StringRef Name)
     : DTy(nullptr), NeedsFixup(false), Name(Name) {
   switch (Tag) {
   case dwarf::DW_TAG_pointer_type:
+  case dwarf::DW_TAG_reference_type:
+  case dwarf::DW_TAG_rvalue_reference_type:
     Kind = BTF::BTF_KIND_PTR;
     break;
   case dwarf::DW_TAG_typedef:
@@ -1179,7 +1191,7 @@ void BTFDebug::visitDerivedType(const DIDerivedType *DTy, uint32_t &TypeId,
   /// Try to avoid chasing pointees, esp. structure pointees which may
   /// unnecessary bring in a lot of types.
   if (CheckPointer && !SeenPointer) {
-    SeenPointer = Tag == dwarf::DW_TAG_pointer_type && !DTy->getAnnotations();
+    SeenPointer = isPointerLikeTag(Tag) && !DTy->getAnnotations();
   }
 
   if (CheckPointer && SeenPointer) {
@@ -1198,7 +1210,7 @@ void BTFDebug::visitDerivedType(const DIDerivedType *DTy, uint32_t &TypeId,
     }
   }
 
-  if (Tag == dwarf::DW_TAG_pointer_type || Tag == dwarf::DW_TAG_typedef) {
+  if (isPointerLikeTag(Tag) || Tag == dwarf::DW_TAG_typedef) {
     int TmpTypeId = genBTFTypeTags(DTy, -1);
     if (TmpTypeId >= 0) {
       auto TypeDEntry =
@@ -1279,7 +1291,7 @@ void BTFDebug::visitTypeEntry(const DIType *Ty, uint32_t &TypeId,
           if (DIToIdMap.find(BaseTy) != DIToIdMap.end()) {
             DTy = dyn_cast<DIDerivedType>(BaseTy);
           } else {
-            if (CheckPointer && DTy->getTag() == dwarf::DW_TAG_pointer_type &&
+            if (CheckPointer && isPointerLikeTag(DTy->getTag()) &&
                 !DTy->getAnnotations()) {
               SeenPointer = true;
               if (IsForwardDeclCandidate(BaseTy))
@@ -1327,6 +1339,8 @@ void BTFDebug::visitMapDefType(const DIType *Ty, uint32_t &TypeId) {
   case dwarf::DW_TAG_volatile_type:
   case dwarf::DW_TAG_restrict_type:
   case dwarf::DW_TAG_pointer_type:
+  case dwarf::DW_TAG_reference_type:
+  case dwarf::DW_TAG_rvalue_reference_type:
     visitMapDefType(dyn_cast<DIDerivedType>(Ty)->getBaseType(), TmpId);
     break;
   case dwarf::DW_TAG_array_type:
