@@ -1116,10 +1116,17 @@ void BTFDebug::visitEnumType(const DICompositeType *CTy, uint32_t &TypeId) {
   // No BaseType implies forward declaration in which case a
   // BTFTypeEnum with Vlen = 0 is emitted.
   if (CTy->getBaseType() != nullptr) {
-    const auto *BTy = cast<DIBasicType>(CTy->getBaseType());
-    IsSigned = BTy->getEncoding() == dwarf::DW_ATE_signed ||
-               BTy->getEncoding() == dwarf::DW_ATE_signed_char;
-    NumBits = BTy->getSizeInBits();
+    // C++ lets an enumeration's underlying type be a typedef or a qualified
+    // type (enum class E : std::size_t); BTF encodes only its size and
+    // signedness.
+    const DIType *Base = stripDITypeAttributes(CTy->getBaseType());
+    if (const auto *BTy = dyn_cast<DIBasicType>(Base)) {
+      IsSigned = BTy->getEncoding() == dwarf::DW_ATE_signed ||
+                 BTy->getEncoding() == dwarf::DW_ATE_signed_char;
+      NumBits = BTy->getSizeInBits();
+    } else {
+      NumBits = CTy->getSizeInBits();
+    }
   }
 
   if (NumBits <= 32) {
