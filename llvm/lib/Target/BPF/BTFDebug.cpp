@@ -58,6 +58,15 @@ static const DIType *tryRemoveAtomicType(const DIType *Ty) {
   return Ty;
 }
 
+/// The name a function has in BTF. libbpf and the kernel match a function's
+/// BTF to its ELF symbol by name, so a C++ function, whose symbol is its
+/// mangled linkage name, is named that way in BTF too; a C function has no
+/// linkage name and keeps its own.
+static StringRef btfFuncName(const DISubprogram *SP) {
+  StringRef LinkageName = SP->getLinkageName();
+  return LinkageName.empty() ? SP->getName() : LinkageName;
+}
+
 /// C++ references have no BTF kind of their own; they are pointers at the
 /// ABI level and are encoded as BTF_KIND_PTR.
 static bool isPointerLikeTag(unsigned Tag) {
@@ -923,7 +932,7 @@ uint32_t BTFDebug::processDISubprogram(
     const DISubprogram *SP, uint32_t ProtoTypeId, uint8_t Scope,
     const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap) {
   auto FuncTypeEntry =
-      std::make_unique<BTFTypeFunc>(SP->getName(), ProtoTypeId, Scope);
+      std::make_unique<BTFTypeFunc>(btfFuncName(SP), ProtoTypeId, Scope);
   uint32_t FuncId = addType(std::move(FuncTypeEntry));
 
   // Process argument annotations.
