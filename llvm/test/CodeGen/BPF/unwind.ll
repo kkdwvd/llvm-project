@@ -9,6 +9,7 @@
 
 ; OBJ-NOT: .bpf_cleanup
 ; OBJ-NOT: .gcc_except_table
+; OBJ-NOT: .eh_frame
 ; OBJ-NOT: _Unwind_
 ; OBJ-NOT: abort
 ; OBJ-NOT: personality

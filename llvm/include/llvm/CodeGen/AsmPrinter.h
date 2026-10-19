@@ -525,7 +525,7 @@ public:
   void emitPCSections(const MachineFunction &MF);
 
   /// Get the CFISection type for a function.
-  CFISection getFunctionCFISectionType(const Function &F) const;
+  virtual CFISection getFunctionCFISectionType(const Function &F) const;
 
   /// Get the CFISection type for a function.
   CFISection getFunctionCFISectionType(const MachineFunction &MF) const;

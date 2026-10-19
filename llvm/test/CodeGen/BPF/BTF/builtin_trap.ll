@@ -12,6 +12,7 @@ define dso_local void @foo(i32 noundef %0) {
 }
 
 ; CHECK:      .Lfunc_begin0:
+; CHECK-NEXT:   .cfi_sections .debug_frame
 ; CHECK-NEXT:   .cfi_startproc
 ; CHECK-NEXT: # %bb.0:
 ; CHECK-NEXT:    call __bpf_trap

@@ -182,6 +182,18 @@ bool BPFAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   return false;
 }
 
+// BPF unwinds without tables (BPFUnwind.cpp), and the kernel knows a frame
+// without CFI: no function needs an .eh_frame entry, whatever uwtable or
+// a personality says of it. A frame gets CFI for a debugger only.
+AsmPrinter::CFISection
+BPFAsmPrinter::getFunctionCFISectionType(const Function &F) const {
+  if (F.isDeclarationForLinker())
+    return CFISection::None;
+  if (hasDebugInfo() || TM.Options.ForceDwarfFrameSection)
+    return CFISection::Debug;
+  return CFISection::None;
+}
+
 void BPFAsmPrinter::emitInstruction(const MachineInstr *MI) {
   if (MI->isCall()) {
     for (const MachineOperand &Op : MI->operands()) {

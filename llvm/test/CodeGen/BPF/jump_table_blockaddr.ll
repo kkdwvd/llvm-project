@@ -56,7 +56,6 @@ llc -march=bpf -mcpu=v4 < test.ll \
 ; CHECK: bar:                                    # @bar
 ; CHECK: .Lbar$local:
 ; CHECK: 	.type	.Lbar$local,@function
-; CHECK: 	.cfi_startproc
 ; CHECK: # %bb.0:                                # %entry
 ; CHECK: 	r2 = BPF.JT.0.0 ll
 ; CHECK: 	r3 = *(u64 *)(r2 + 0)
@@ -81,7 +80,6 @@ llc -march=bpf -mcpu=v4 < test.ll \
 ; CHECK: .Lfunc_end0:
 ; CHECK: 	.size	bar, .Lfunc_end0-bar
 ; CHECK: 	.size	.Lbar$local, .Lfunc_end0-bar
-; CHECK: 	.cfi_endproc
 ; CHECK: 	.section	.jumptables,"",@progbits
 ; CHECK: BPF.JT.0.0:
 ; CHECK: 	.quad	.LBB0_3-.text

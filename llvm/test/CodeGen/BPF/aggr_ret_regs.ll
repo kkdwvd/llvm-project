@@ -13,7 +13,6 @@ define dso_local noundef i32 @bar1(i32 noundef returned %0) local_unnamed_addr #
 ; CHECK-LABEL: bar1:
 ; CHECK:       .Lbar1$local:
 ; CHECK-NEXT:    .type .Lbar1$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    r0 = r1
 ; CHECK-NEXT:    exit
@@ -24,7 +23,6 @@ define dso_local [2 x i64] @bar2(i32 noundef %0, i32 noundef %1) local_unnamed_a
 ; CHECK-LABEL: bar2:
 ; CHECK:       .Lbar2$local:
 ; CHECK-NEXT:    .type .Lbar2$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    r0 = r1
 ; CHECK-NEXT:    r0 <<= 32
@@ -43,7 +41,6 @@ define dso_local [2 x i64] @bar3(i32 noundef %0, i32 noundef %1, i32 noundef %2)
 ; CHECK-LABEL: bar3:
 ; CHECK:       .Lbar3$local:
 ; CHECK-NEXT:    .type .Lbar3$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    r0 = r2
 ; CHECK-NEXT:    r0 <<= 32
@@ -68,7 +65,6 @@ define dso_local [2 x i64] @bar4(i32 noundef %0, i32 noundef %1, i32 noundef %2,
 ; CHECK-LABEL: bar4:
 ; CHECK:       .Lbar4$local:
 ; CHECK-NEXT:    .type .Lbar4$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    r0 = r2
 ; CHECK-NEXT:    r1 <<= 32
@@ -102,7 +98,6 @@ define dso_local noundef i32 @check1(i32 noundef returned %0) local_unnamed_addr
 ; CHECK-LABEL: check1:
 ; CHECK:       .Lcheck1$local:
 ; CHECK-NEXT:    .type .Lcheck1$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    r0 = r1
 ; CHECK-NEXT:    exit
@@ -113,7 +108,6 @@ define dso_local i32 @check2(i32 noundef %0, i32 noundef %1) local_unnamed_addr 
 ; CHECK-LABEL: check2:
 ; CHECK:       .Lcheck2$local:
 ; CHECK-NEXT:    .type .Lcheck2$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    call bar2
 ; CHECK-NEXT:    r0 += r2
@@ -130,7 +124,6 @@ define dso_local i32 @check3(i32 noundef %0, i32 noundef %1, i32 noundef %2) loc
 ; CHECK-LABEL: check3:
 ; CHECK:       .Lcheck3$local:
 ; CHECK-NEXT:    .type .Lcheck3$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    call bar3
 ; CHECK-NEXT:    r1 = 4294967297 ll
@@ -152,7 +145,6 @@ define dso_local i32 @check4(i32 noundef %0, i32 noundef %1, i32 noundef %2, i32
 ; CHECK-LABEL: check4:
 ; CHECK:       .Lcheck4$local:
 ; CHECK-NEXT:    .type .Lcheck4$local,@function
-; CHECK-NEXT:    .cfi_startproc
 ; CHECK-NEXT:  # %bb.0:
 ; CHECK-NEXT:    call bar4
 ; CHECK-NEXT:    r1 = r0

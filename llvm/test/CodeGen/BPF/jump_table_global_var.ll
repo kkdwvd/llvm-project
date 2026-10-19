@@ -54,7 +54,6 @@ llc -march=bpf -mcpu=v4 < test.ll \
 ; CHECK: foo:                                    # @foo
 ; CHECK: .Lfoo$local:
 ; CHECK: 	.type	.Lfoo$local,@function
-; CHECK: 	.cfi_startproc
 ; CHECK: # %bb.0:                                # %entry
 ; CHECK:                                         # kill: def $w1 killed $w1 def $r1
 ; CHECK: 	w1 &= 1
@@ -75,7 +74,6 @@ llc -march=bpf -mcpu=v4 < test.ll \
 ; CHECK: .Lfunc_end0:
 ; CHECK: 	.size	foo, .Lfunc_end0-foo
 ; CHECK: 	.size	.Lfoo$local, .Lfunc_end0-foo
-; CHECK: 	.cfi_endproc
 ; CHECK: 	.section	.jumptables,"",@progbits
 ; CHECK: BPF.JT.0.0:
 ; CHECK: 	.quad	.LBB0_1-.text

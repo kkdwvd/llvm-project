@@ -35,6 +35,7 @@ public:
                              const char *ExtraCode, raw_ostream &O) override;
 
   void emitInstruction(const MachineInstr *MI) override;
+  CFISection getFunctionCFISectionType(const Function &F) const override;
   MCSymbol *getJTPublicSymbol(unsigned JTI);
   void emitJumpTableInfo() override;
 
