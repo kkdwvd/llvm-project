@@ -1,5 +1,6 @@
 ; RUN: llc -mtriple=bpfel -filetype=asm -o - %s | FileCheck %s
 ; RUN: llc -mtriple=bpfeb -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -data-sections -filetype=asm -o - %s | FileCheck %s
 
 ; Source code:
 ;   struct s { int i; } __attribute__((aligned(16)));
