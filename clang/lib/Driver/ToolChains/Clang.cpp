@@ -4908,10 +4908,17 @@ renderDebugOptions(const ToolChain &TC, const Driver &D, const llvm::Triple &T,
   // figure out if we need to "upgrade" it to standalone debug info.
   // We parse these two '-f' options whether or not they will be used,
   // to claim them even if you wrote "-fstandalone-debug -gline-tables-only"
+  //
+  // BTF is built from the debug info of each object alone, and libbpf loads
+  // no map or global whose type it leaves declared, as limited debug info does
+  // with a C++ class whose constructor another unit defines: C++ on BPF is
+  // standalone, as Darwin's debug info is. C has no such class, and its
+  // objects keep the debug info, and the BTF, they had.
   bool NeedFullDebug = Args.hasFlag(
       options::OPT_fstandalone_debug, options::OPT_fno_standalone_debug,
       DebuggerTuning == llvm::DebuggerKind::LLDB ||
-          TC.GetDefaultStandaloneDebug());
+          TC.GetDefaultStandaloneDebug() ||
+          (T.isBPF() && types::isCXX(InputType)));
   if (const Arg *A = Args.getLastArg(options::OPT_fstandalone_debug))
     (void)checkDebugInfoOption(A, Args, D, TC);
 
