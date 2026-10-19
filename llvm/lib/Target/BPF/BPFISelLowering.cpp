@@ -986,6 +986,12 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 //   fence            full barrier, a fetch-add of zero on the stack
 //                    (emitFence); a singlethread fence is a compiler barrier
 //
+// Without them, as bpf_atomic.h falls back to, a plain access with full
+// barriers: a load acquire or seq_cst is a plain load and a full barrier, a
+// store release is a full barrier and a plain store, a store seq_cst that is
+// not an exchange is a plain store between two full barriers. AtomicExpand
+// inserts the barriers (shouldInsertFencesForAtomic).
+//
 // This is the x86 mapping, a fully ordered exchange for seq_cst stores, which
 // the x86 JIT needs since its store-release is a plain mov; on arm64 the JIT
 // emits ldar, which is RCsc with stlr and swpal, so it is AArch64's mapping
@@ -1009,6 +1015,21 @@ bool BPFTargetLowering::isSeqCstStoreAnExchange(EVT MemVT) const {
   return MemVT == MVT::i64 || (MemVT == MVT::i32 && HasAlu32);
 }
 
+bool BPFTargetLowering::shouldInsertFencesForAtomic(
+    const Instruction *I) const {
+  if (HasLoadAcqStoreRel)
+    return false;
+  if (isa<LoadInst>(I))
+    return true;
+  auto *SI = dyn_cast<StoreInst>(I);
+  if (!SI)
+    return false;
+  EVT MemVT = getMemValueType(SI->getDataLayout(),
+                              SI->getValueOperand()->getType());
+  return SI->getOrdering() != AtomicOrdering::SequentiallyConsistent ||
+         !isSeqCstStoreAnExchange(MemVT);
+}
+
 bool BPFTargetLowering::shouldInsertTrailingSeqCstFenceForAtomicStore(
     const Instruction *I) const {
   auto *SI = dyn_cast<StoreInst>(I);
@@ -1020,35 +1041,65 @@ bool BPFTargetLowering::shouldInsertTrailingSeqCstFenceForAtomicStore(
   return !isSeqCstStoreAnExchange(MemVT);
 }
 
+// An atomic load or store as the plain one of the same size, volatile so that
+// it is neither split nor merged, as READ_ONCE() and WRITE_ONCE() make it.
+static SDValue lowerToPlainAccess(AtomicSDNode *N, SDValue Op,
+                                  SelectionDAG &DAG) {
+  SDLoc DL(N);
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineMemOperand *MMO = N->getMemOperand();
+  MachineMemOperand *PlainMMO = MF.getMachineMemOperand(
+      MMO->getPointerInfo(), MMO->getFlags() | MachineMemOperand::MOVolatile,
+      MMO->getMemoryType(), MMO->getBaseAlign(),
+      MMOMetadata(MMO->getAAInfo(), MMO->getRanges()));
+  EVT MemVT = N->getMemoryVT();
+
+  if (N->getOpcode() == ISD::ATOMIC_LOAD) {
+    EVT VT = Op.getValueType();
+    SDValue Load;
+    if (VT == MemVT) {
+      Load = DAG.getLoad(VT, DL, N->getChain(), N->getBasePtr(), PlainMMO);
+    } else {
+      ISD::LoadExtType ExtType = N->getExtensionType();
+      if (ExtType == ISD::NON_EXTLOAD)
+        ExtType = ISD::EXTLOAD;
+      Load = DAG.getExtLoad(ExtType, DL, VT, N->getChain(), N->getBasePtr(),
+                            MemVT, PlainMMO);
+    }
+    return DAG.getMergeValues({Load, Load.getValue(1)}, DL);
+  }
+
+  SDValue Val = N->getVal();
+  if (Val.getValueType() == MemVT)
+    return DAG.getStore(N->getChain(), DL, Val, N->getBasePtr(), PlainMMO);
+  return DAG.getTruncStore(N->getChain(), DL, Val, N->getBasePtr(), MemVT,
+                           PlainMMO);
+}
+
 SDValue BPFTargetLowering::LowerATOMIC_LOAD_STORE(SDValue Op,
                                                   SelectionDAG &DAG) const {
   auto *N = cast<AtomicSDNode>(Op.getNode());
   SDLoc DL(N);
-
-  if (N->getMergedOrdering() != AtomicOrdering::SequentiallyConsistent)
-    return Op;
-
-  if (!HasLoadAcqStoreRel) {
-    fail(DL, DAG,
-         "sequentially consistent (seq_cst) atomic load/store needs "
-         "load-acquire and store-release (-mcpu=v4)");
-    if (N->getOpcode() == ISD::ATOMIC_LOAD)
-      return DAG.getMergeValues(
-          {DAG.getUNDEF(Op.getValueType()), N->getChain()}, DL);
-    return N->getChain();
-  }
-
-  // A load is selected as a load-acquire (acquiring_load), a store of 8 or 16
-  // bits as a store-release (releasing_store), which AtomicExpand put a full
-  // barrier after (shouldInsertTrailingSeqCstFenceForAtomicStore).
   EVT MemVT = N->getMemoryVT();
-  if (N->getOpcode() == ISD::ATOMIC_LOAD || !isSeqCstStoreAnExchange(MemVT))
-    return Op;
 
-  return DAG
-      .getAtomic(ISD::ATOMIC_SWAP, DL, MemVT, N->getChain(), N->getBasePtr(),
-                 N->getVal(), N->getMemOperand())
-      .getValue(1);
+  if (N->getOpcode() == ISD::ATOMIC_STORE &&
+      N->getMergedOrdering() == AtomicOrdering::SequentiallyConsistent &&
+      isSeqCstStoreAnExchange(MemVT))
+    return DAG
+        .getAtomic(ISD::ATOMIC_SWAP, DL, MemVT, N->getChain(), N->getBasePtr(),
+                   N->getVal(), N->getMemOperand())
+        .getValue(1);
+
+  // Before -mcpu=v4, AtomicExpand made every other one relaxed and put full
+  // barriers around it (shouldInsertFencesForAtomic).
+  if (!HasLoadAcqStoreRel)
+    return lowerToPlainAccess(N, Op, DAG);
+
+  // A seq_cst load is selected as a load-acquire (acquiring_load), a seq_cst
+  // store of 8 or 16 bits as a store-release (releasing_store), which
+  // AtomicExpand put a full barrier after
+  // (shouldInsertTrailingSeqCstFenceForAtomicStore).
+  return Op;
 }
 
 // BPF has no fence instruction, but its atomics that fetch are fully ordered,
