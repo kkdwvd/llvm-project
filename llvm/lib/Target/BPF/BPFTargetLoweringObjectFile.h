@@ -19,6 +19,9 @@ public:
   void initialize(MCContext &Ctx, const TargetMachine &TM,
                   const Module &M) override;
 
+  MCSection *SelectSectionForGlobal(const GlobalObject *GO, SectionKind Kind,
+                                    const TargetMachine &TM) const override;
+
   MCSection *getSectionForLSDA(const Function &F, const MCSymbol &FnSym,
                                const TargetMachine &TM) const override;
 
