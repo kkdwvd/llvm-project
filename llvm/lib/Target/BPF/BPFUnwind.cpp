@@ -8,16 +8,25 @@
 //
 // There are two ways to leave a frame, and a call that may unwind is followed
 // by an insn that tells them apart:
-//   ret                           exit
-//   invoke f() unwind pad         call f; unwind_goto pad
-//   resume                        r0 = 0; unwind_exit
-//   call _Unwind_RaiseException   r0 = 0; unwind_exit
-//   invoke _Unwind_RaiseException goto pad
+//   ret                               exit
+//   invoke f() unwind pad             call f; unwind_goto pad
+//   resume                            r0 = exn; unwind_exit
+//   call _Unwind_RaiseException(ue)   r0 = ue; unwind_exit
+//   invoke _Unwind_RaiseException(ue) r0 = ue; goto pad
 // unwind_goto is taken when the callee left with unwind_exit. No register says
 // so: how one insn tells the other is up to the JIT. Otherwise unwind_exit is
-// exit, hence r0, and r2 as well in a function that returns more than 8 bytes.
-// A pad expects the exception object in r0. There is none, so a pad that looks
-// at it starts with r0 = 0.
+// exit, hence r0, and r2 as well where the return value takes r0 and r2: the
+// verifier checks every register of it at both.
+//
+// The exception object travels in r0: unwind_exit returns it as exit returns
+// a value, and a pad finds it there, in the exception pointer register. It is
+// what was passed to _Unwind_RaiseException(), and a pad that resumes passes on
+// what it got. A program is no special case: out of it, unwind_exit is exit,
+// and the verifier's checks of the program's return value keep the kernel
+// safe. The compiler does not pick a return value for an exception that
+// escapes: 0 means one thing to one program type and another to the next
+// (XDP_ABORTED, drop for cgroup skb, allow for LSM, CPU 0 for sched_ext's
+// select_cpu), and which functions are programs is the loader's convention.
 //
 // _Unwind_RaiseException() is how a language runtime starts an unwind with the
 // Itanium ABI, e.g. at the end of a panic handler. To start one and to carry
@@ -32,8 +41,6 @@
 #include "BPFInstrInfo.h"
 #include "BPFSubtarget.h"
 #include "llvm/ADT/DepthFirstIterator.h"
-#include "llvm/ADT/SetVector.h"
-#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -53,6 +60,16 @@ static constexpr StringLiteral UnwindRaise = "_Unwind_RaiseException";
 /// uwtable is how a frontend asks for unwinding through a function to work.
 static bool canUnwind(const Function &F) {
   return F.hasUWTable() && !F.doesNotThrow();
+}
+
+bool llvm::isBPFUnwindCallee(const GlobalValue &Callee,
+                             const TargetLowering &TLI) {
+  // Code that defines them gets what it defines.
+  if (!Callee.isDeclaration())
+    return false;
+  StringRef Name = Callee.getName();
+  return Name == UnwindRaise ||
+         Name == StringRef(TLI.getLibcallName(RTLIB::UNWIND_RESUME));
 }
 
 namespace {
@@ -86,9 +103,6 @@ struct BPFUnwindPrepare : public ModulePass {
       for (Instruction &I : instructions(F)) {
         auto *CB = dyn_cast<CallBase>(&I);
         if (CB && isRaise(*CB)) {
-          // Nobody looks at the exception object.
-          for (Use &Arg : CB->args())
-            Arg.set(PoisonValue::get(Arg->getType()));
           CB->setDoesNotReturn();
           // Without a pad it leaves the frame.
           if (isa<CallInst>(CB))
@@ -96,11 +110,6 @@ struct BPFUnwindPrepare : public ModulePass {
           Changed = true;
         } else if (isa<CallInst>(I) && mayUnwind(I)) {
           Calls.push_back(cast<CallInst>(&I));
-        } else if (auto *RI = dyn_cast<ResumeInst>(&I)) {
-          // DwarfEHPrepare passes it to _Unwind_Resume(). Don't keep it alive
-          // over the pad for that.
-          RI->setOperand(0, PoisonValue::get(RI->getValue()->getType()));
-          Changed = true;
         }
       }
       if (Calls.empty())
@@ -116,7 +125,7 @@ struct BPFUnwindPrepare : public ModulePass {
       LandingPadInst *LP = B.CreateLandingPad(
           StructType::get(PointerType::getUnqual(C), Type::getInt32Ty(C)), 0);
       LP->setCleanup(true);
-      B.CreateResume(PoisonValue::get(LP->getType()));
+      B.CreateResume(LP);
       for (CallInst *CI : Calls)
         changeToInvokeAndSplitBasicBlock(CI, Pad);
       Changed = true;
@@ -132,16 +141,11 @@ struct BPFUnwindLower : public MachineFunctionPass {
   BPFUnwindLower() : MachineFunctionPass(ID) {}
   StringRef getPassName() const override { return "BPF Unwind Lower"; }
 
-  /// What DwarfEHPrepare made of 'resume'.
-  StringRef UnwindResume;
+  const TargetLowering *TLI = nullptr;
 
   bool leavesFrame(const MachineInstr &MI) const {
     const MachineOperand &MO = MI.getOperand(0);
-    // A program that defines them gets what it defines.
-    if (!MO.isGlobal() || !MO.getGlobal()->isDeclaration())
-      return false;
-    StringRef Name = MO.getGlobal()->getName();
-    return Name == UnwindRaise || Name == UnwindResume;
+    return MO.isGlobal() && isBPFUnwindCallee(*MO.getGlobal(), *TLI);
   }
 
   /// Nothing after \p MI in its block runs: \p Succ, if any, is what follows.
@@ -177,12 +181,10 @@ struct BPFUnwindLower : public MachineFunctionPass {
   bool runOnMachineFunction(MachineFunction &MF) override {
     const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
     const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
-    UnwindResume = MF.getSubtarget().getTargetLowering()->getLibcallName(
-        RTLIB::UNWIND_RESUME);
+    TLI = MF.getSubtarget().getTargetLowering();
     DenseMap<MCSymbol *, MachineBasicBlock *> Begin;
     SmallVector<std::pair<MachineInstr *, MachineBasicBlock *>, 8> Sites;
     SmallVector<MachineInstr *, 8> Labels, Resumes;
-    SmallSetVector<MachineBasicBlock *, 8> Pads;
 
     if (const char *Msg = unsupported(MF)) {
       const Function &F = MF.getFunction();
@@ -226,12 +228,21 @@ struct BPFUnwindLower : public MachineFunctionPass {
       const auto *II =
           dyn_cast_or_null<InvokeInst>(MBB->getBasicBlock()->getTerminator());
 
-      Pads.insert(Pad);
       if (leavesFrame(*Call)) {
+        // LowerCall() passed the exception object in r0, where the pad
+        // expects it.
+        if (!Call->readsRegister(BPF::R0, &TRI))
+          BuildMI(*MBB, Call, DL, TII.get(BPF::MOV_ri), BPF::R0).addImm(0);
         endBlockAfter(*Call, Pad);
         BuildMI(MBB, DL, TII.get(BPF::JMP)).addMBB(Pad);
         Call->eraseFromParent();
-      } else if (II && II->doesNotReturn()) {
+        continue;
+      }
+
+      // The callee sets r0 also when it unwinds: to the exception object.
+      // Without the def, r0 would look live over the call into the pad.
+      Call->addRegisterDefined(BPF::R0, &TRI);
+      if (II && II->doesNotReturn()) {
         // Nothing sensible follows the call, but something has to.
         endBlockAfter(*Call, Pad);
         BuildMI(MBB, DL, TII.get(BPF::UNWIND_GOTO)).addMBB(Pad);
@@ -246,19 +257,8 @@ struct BPFUnwindLower : public MachineFunctionPass {
       }
     }
 
-    for (MachineBasicBlock *Pad : Pads) {
-      LivePhysRegs Live(TRI);
-      Live.addLiveOuts(*Pad);
-      for (MachineInstr &MI : reverse(*Pad))
-        Live.stepBackward(MI);
-      if (!Live.available(MF.getRegInfo(), BPF::R0))
-        BuildMI(*Pad, Pad->begin(), DebugLoc(), TII.get(BPF::MOV_ri), BPF::R0)
-            .addImm(0);
-      Pad->removeLiveIn(BPF::R0);
-    }
-
     // unwind_exit returns what exit returns: a value of more than 8 bytes is in
-    // r0 and r2.
+    // r0 and r2. r0 holds the exception object, which LowerCall() passed there.
     SmallVector<ISD::OutputArg, 2> Outs;
     const Function &F = MF.getFunction();
     GetReturnInfo(F.getCallingConv(), F.getReturnType(), F.getAttributes(),
@@ -269,7 +269,8 @@ struct BPFUnwindLower : public MachineFunctionPass {
       MachineBasicBlock *MBB = Call->getParent();
       DebugLoc DL = Call->getDebugLoc();
 
-      BuildMI(*MBB, Call, DL, TII.get(BPF::MOV_ri), BPF::R0).addImm(0);
+      if (!Call->readsRegister(BPF::R0, &TRI))
+        BuildMI(*MBB, Call, DL, TII.get(BPF::MOV_ri), BPF::R0).addImm(0);
       MachineInstrBuilder Exit =
           BuildMI(*MBB, Call, DL, TII.get(BPF::UNWIND_EXIT))
               .addReg(BPF::R0, RegState::Implicit);

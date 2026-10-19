@@ -588,6 +588,14 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     report_fatal_error("unhandled argument location");
   }
 
+  // The unwinder takes the exception object in r0, where unwind_exit returns
+  // it and a landing pad expects it. BPFUnwindLower makes the call one or the
+  // other.
+  if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee))
+    if (isBPFUnwindCallee(*G->getGlobal(), *this) && !RegsToPass.empty() &&
+        RegsToPass.front().first == BPF::R1)
+      RegsToPass.front().first = BPF::R0;
+
   SDValue InGlue;
 
   // Build a sequence of copy-to-reg nodes chained together with token chain and

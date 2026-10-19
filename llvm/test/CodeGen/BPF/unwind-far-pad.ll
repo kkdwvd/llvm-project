@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=bpfel -mcpu=v4 -gotol-abs-low-bound 0 -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -gotol-abs-low-bound 0 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 
 ; unwind_goto has a 16-bit offset like other conditional jumps, and it has to stay
 ; right after the call.
@@ -31,6 +31,7 @@ cleanup:
 ; CHECK-NEXT:    r0 = 7
 ; CHECK-NEXT:    exit
 ; CHECK:       [[PAD]]:
+; CHECK-NEXT:    [[EXN:r[6-9]]] = r0
 ; CHECK:         call bpf_free
-; CHECK-NEXT:    r0 = 0
+; CHECK-NEXT:    r0 = [[EXN]]
 ; CHECK-NEXT:    unwind_exit

@@ -23,8 +23,10 @@ namespace llvm {
 class BPFRegisterBankInfo;
 class BPFSubtarget;
 class BPFTargetMachine;
+class GlobalValue;
 class InstructionSelector;
 class PassRegistry;
+class TargetLowering;
 
 #define BPF_TRAP "__bpf_trap"
 
@@ -37,6 +39,10 @@ public:
 ModulePass *createBPFCheckAndAdjustIRLegacyPass();
 ModulePass *createBPFUnwindPreparePass();
 FunctionPass *createBPFUnwindLowerPass();
+
+/// Whether a call of \p Callee starts or carries on an unwind, which the
+/// backend lowers instead of making the call. See BPFUnwind.cpp.
+bool isBPFUnwindCallee(const GlobalValue &Callee, const TargetLowering &TLI);
 
 class BPFISelDAGToDAGPass : public SelectionDAGISelPass {
 public:

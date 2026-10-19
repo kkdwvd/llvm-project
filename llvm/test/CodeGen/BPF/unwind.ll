@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=bpfel -mcpu=v4 -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -filetype=obj -o %t %s
 ; RUN: llvm-readelf -S -s %t | FileCheck --check-prefix=OBJ %s
 
@@ -21,6 +21,7 @@ declare void @abort() noreturn nounwind
 declare i32 @rust_eh_personality(i32, i64, ptr, ptr)
 
 ; invoke, cleanup pad, resume. A call of nounwind function is left alone.
+; The pad gets the exception object in r0 and passes it on in r0.
 define void @stat_inc(ptr %map, i64 %val) uwtable personality ptr @rust_eh_personality {
 entry:
   %node = call ptr @bpf_alloc(i64 256, i64 0)
@@ -44,8 +45,9 @@ cleanup:
 ; CHECK-NEXT:  # %bb
 ; CHECK-NEXT:    exit
 ; CHECK:       [[PAD]]:
+; CHECK-NEXT:    [[EXN:r[6-9]]] = r0
 ; CHECK:         call bpf_free
-; CHECK-NEXT:    r0 = 0
+; CHECK-NEXT:    r0 = [[EXN]]
 ; CHECK-NEXT:    unwind_exit
 
 ; A plain call that may unwind: nothing to clean up, pass it on.
@@ -62,7 +64,6 @@ entry:
 ; CHECK-NEXT:    r0 = 7
 ; CHECK-NEXT:    exit
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    unwind_exit
 
 ; catch_unwind: the pad does not resume.
@@ -89,7 +90,7 @@ caught:
 ; CHECK-NEXT:    r0 = 1
 ; CHECK-NEXT:    exit
 
-; A pad expects the exception object in r0. There is none.
+; A pad finds the exception object in r0.
 define void @looks_at_exn(ptr %map) uwtable personality ptr @rust_eh_personality {
 entry:
   invoke void @btree_insert(ptr %map, ptr null, i64 1)
@@ -109,7 +110,6 @@ caught:
 ; CHECK:         call btree_insert
 ; CHECK-NEXT:    unwind_goto [[PAD:.LBB[0-9_]+]]
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    r1 = r0
 ; CHECK-NEXT:    call bpf_free
 
@@ -158,25 +158,27 @@ terminate:
 ; The start of an unwind, as at the end of a panic handler. It is not different
 ; from carrying one on. By its prototype _Unwind_RaiseException() comes back
 ; when it fails, so a runtime has something after it. Here it cannot fail: that
-; code is dropped and the function ends with unwind_exit.
-define void @fail() noreturn uwtable {
+; code is dropped and the function ends with unwind_exit, which returns the
+; exception object.
+define void @fail(ptr %exn) noreturn uwtable {
 entry:
-  %err = call i32 @_Unwind_RaiseException(ptr null)
+  %err = call i32 @_Unwind_RaiseException(ptr %exn)
   call void @abort()
   unreachable
 }
 
 ; CHECK-LABEL: fail:
 ; CHECK-NOT:     call
-; CHECK:         r0 = 0
+; CHECK:         r0 = r1
 ; CHECK-NEXT:    unwind_exit
 ; CHECK-NOT:     call
 ; CHECK:       .Lfunc_end
 
-; The same in a frame that owns something: its own pad comes first.
-define void @fail_owner(ptr %node) uwtable personality ptr @rust_eh_personality {
+; The same in a frame that owns something: its own pad comes first, and gets
+; the exception object in r0.
+define void @fail_owner(ptr %node, ptr %exn) uwtable personality ptr @rust_eh_personality {
 entry:
-  %err = invoke i32 @_Unwind_RaiseException(ptr null)
+  %err = invoke i32 @_Unwind_RaiseException(ptr %exn)
           to label %failed unwind label %cleanup
 
 failed:
@@ -192,8 +194,12 @@ cleanup:
 ; CHECK-LABEL: fail_owner:
 ; CHECK-NOT:     _Unwind_
 ; CHECK-NOT:     exit
+; CHECK:         r0 = r2
+; CHECK-NOT:     exit
+; CHECK:         [[EXN:r[6-9]]] = r0
+; CHECK-NOT:     exit
 ; CHECK:         call bpf_free
-; CHECK-NEXT:    r0 = 0
+; CHECK-NEXT:    r0 = [[EXN]]
 ; CHECK-NEXT:    unwind_exit
 ; CHECK-NOT:     call
 ; CHECK:       .Lfunc_end
@@ -224,8 +230,9 @@ entry:
 
 ; CHECK-LABEL: resume_spelled_out:
 ; CHECK-NOT:     call
-; CHECK:         r0 = 0
-; CHECK-NEXT:    unwind_exit
+; CHECK:         r0 = r1
+; CHECK-NOT:     r0
+; CHECK:         unwind_exit
 
 ; A callee that does not return: its unwind_exit needs unwind_goto all the same.
 ; What follows is not reached, but the block cannot end there.
@@ -235,7 +242,7 @@ entry:
   br i1 %c, label %bad, label %good
 
 bad:
-  call void @fail()
+  call void @fail(ptr null)
   unreachable
 
 good:
@@ -247,7 +254,6 @@ good:
 ; CHECK-NEXT:    unwind_goto [[PAD:.LBB[0-9_]+]]
 ; CHECK-NEXT:    goto [[PAD]]
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    unwind_exit
 
 ; An indirect call is followed by unwind_goto whatever the callee is. A nounwind
@@ -301,7 +307,7 @@ caught:
 ; CHECK-NEXT:    exit
 
 ; unwind_exit returns what exit returns. More than 8 bytes are in r0 and r2, and
-; the kernel wants both to be set.
+; the kernel wants both to be set. r0 is the exception object.
 define i128 @returns_pair(ptr %map) uwtable {
 entry:
   call void @btree_insert(ptr %map, ptr null, i64 1)
@@ -313,8 +319,32 @@ entry:
 ; CHECK-NEXT:    unwind_goto [[PAD:.LBB[0-9_]+]]
 ; CHECK:         exit
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    r2 = 0
+; CHECK-NEXT:    unwind_exit
+
+; A program is no special case: out of it, unwind_exit is exit, and the
+; verifier checks r0 as the program's return value. The compiler does not pick
+; one for an exception that escapes.
+define i32 @prog(ptr %ctx) uwtable section "tc" {
+entry:
+  call void @btree_insert(ptr %ctx, ptr null, i64 1)
+  ret i32 1
+}
+
+; CHECK-LABEL: prog:
+; CHECK:         call btree_insert
+; CHECK-NEXT:    unwind_goto [[PAD:.LBB[0-9_]+]]
+; CHECK:       [[PAD]]:
+; CHECK-NEXT:    unwind_exit
+
+define i32 @prog_fails(ptr %exn) uwtable section "tc" {
+entry:
+  %err = call i32 @_Unwind_RaiseException(ptr %exn)
+  unreachable
+}
+
+; CHECK-LABEL: prog_fails:
+; CHECK:         r0 = r1
 ; CHECK-NEXT:    unwind_exit
 
 ; nounwind: nothing changes.
