@@ -12,6 +12,7 @@
 
 #include "BPFTargetMachine.h"
 #include "BPF.h"
+#include "BPFMachineFunctionInfo.h"
 #include "BPFTargetLoweringObjectFile.h"
 #include "BPFTargetTransformInfo.h"
 #include "MCTargetDesc/BPFMCAsmInfo.h"
@@ -125,6 +126,13 @@ void BPFPassConfig::addIRPasses() {
 TargetTransformInfo
 BPFTargetMachine::getTargetTransformInfo(const Function &F) const {
   return TargetTransformInfo(std::make_unique<BPFTTIImpl>(this, F));
+}
+
+MachineFunctionInfo *BPFTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return BPFMachineFunctionInfo::create<BPFMachineFunctionInfo>(Allocator, F,
+                                                                STI);
 }
 
 // Install an instruction selector pass using

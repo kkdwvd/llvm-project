@@ -43,18 +43,11 @@ def BPFcallseq_end  : SDNode<"ISD::CALLSEQ_END",   SDT_BPFCallSeqEnd,
                              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 def BPFbrcc         : SDNode<"BPFISD::BR_CC", SDT_BPFBrCC, [SDNPHasChain]>;
 
-def SDT_BPFLoadStackArg : SDTypeProfile<1, 1, [
-  SDTCisVT<0, i64>,  // result value
-  SDTCisVT<1, i64>   // operand: offset
-]>;
 def SDT_BPFStoreStackArg : SDTypeProfile<0, 2, [
   SDTCisVT<0, i64>,  // operand 0: offset
   SDTCisVT<1, i64>   // operand 1: stored value
 ]>;
 
-def BPFload_stack_arg : SDNode<"BPFISD::LOAD_STACK_ARG",
-                               SDT_BPFLoadStackArg,
-                               [SDNPHasChain, SDNPMayLoad]>;
 def BPFstore_stack_arg : SDNode<"BPFISD::STORE_STACK_ARG",
                                 SDT_BPFStoreStackArg,
                                 [SDNPHasChain, SDNPMayStore]>;
@@ -319,6 +312,10 @@ let Predicates = [BPFHasGotox] in {
 }
 }
 
+// The load of an incoming stack argument, emitted at the entry of the function
+// by BPFDAGToDAGISel::emitFunctionEntryCode, not selected from the DAG: the
+// verifier allows it only before the first call and the first store to the
+// outgoing argument area.
 let hasSideEffects = 1, mayLoad = 1 in {
   def LOAD_STACK_ARG_PSEUDO
     : Pseudo<(outs GPR:$dst), (ins s16imm:$off),

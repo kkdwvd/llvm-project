@@ -13,6 +13,7 @@
 
 #include "BPFISelLowering.h"
 #include "BPF.h"
+#include "BPFMachineFunctionInfo.h"
 #include "BPFSubtarget.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -489,12 +490,13 @@ SDValue BPFTargetLowering::LowerFormalArguments(
         break;
       }
 
-      // Physical extra argument slot is always 64-bit.
-      SDValue StackVal = DAG.getNode(BPFISD::LOAD_STACK_ARG, DL,
-                                     DAG.getVTList(MVT::i64, MVT::Other), Chain,
-                                     DAG.getConstant(Off, DL, MVT::i64));
-      SDValue ArgValue = StackVal.getValue(0);
-      Chain = StackVal.getValue(1);
+      // The slot is always 64 bits. The load is no node of the DAG: it is
+      // emitted at the entry of the function by emitFunctionEntryCode, where
+      // the verifier wants it, so here the argument is a virtual register, as
+      // an argument in a register is.
+      Register VReg = RegInfo.createVirtualRegister(&BPF::GPRRegClass);
+      MF.getInfo<BPFMachineFunctionInfo>()->addIncomingStackArg(VReg, Off);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i64);
       InVals.push_back(convertLocValType(DAG, DL, VA, MVT::i64, ArgValue));
       continue;
     }

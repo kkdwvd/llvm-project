@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "BPF.h"
+#include "BPFMachineFunctionInfo.h"
 #include "BPFSubtarget.h"
 #include "BPFTargetMachine.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
@@ -54,6 +55,8 @@ public:
   }
 
   void PreprocessISelDAG() override;
+
+  void emitFunctionEntryCode() override;
 
   bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                     InlineAsm::ConstraintCode ConstraintCode,
@@ -193,17 +196,6 @@ void BPFDAGToDAGISel::Select(SDNode *Node) {
   switch (Opcode) {
   default:
     break;
-  case BPFISD::LOAD_STACK_ARG: {
-    SDValue Chain = Node->getOperand(0);
-    auto *CN = cast<ConstantSDNode>(Node->getOperand(1));
-    SDValue Off =
-        CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Node), MVT::i64);
-    EVT ValVT = Node->getValueType(0);
-    CurDAG->SelectNodeTo(Node, BPF::LOAD_STACK_ARG_PSEUDO, ValVT, MVT::Other,
-                         Off, Chain);
-    return;
-  }
-
   case BPFISD::STORE_STACK_ARG: {
     SDValue Chain = Node->getOperand(0);
     auto *CN = cast<ConstantSDNode>(Node->getOperand(1));
@@ -319,6 +311,23 @@ void BPFDAGToDAGISel::PreprocessLoad(SDNode *Node,
   I++;
   // It is safe to delete node now
   CurDAG->DeleteNode(Node);
+}
+
+// Load the incoming stack arguments from r11 at the entry of the function,
+// ahead of the code of the entry block, as the arguments in registers are
+// copied out of their registers there. The verifier allows a load from r11
+// only before the first call and the first store to the outgoing argument
+// area of the function, which the DAG does not order: the libcall that the
+// legalizer makes for an operation it expands, __multi3 for a 128-bit
+// multiply say, is chained to the entry node, so the scheduler may place it
+// before a load that is chained after the entry node too.
+void BPFDAGToDAGISel::emitFunctionEntryCode() {
+  auto *FI = MF->getInfo<BPFMachineFunctionInfo>();
+  MachineBasicBlock *EntryMBB = &MF->front();
+  for (auto [VReg, Off] : FI->takeIncomingStackArgs())
+    BuildMI(EntryMBB, DebugLoc(),
+            Subtarget->getInstrInfo()->get(BPF::LOAD_STACK_ARG_PSEUDO), VReg)
+        .addImm(Off);
 }
 
 void BPFDAGToDAGISel::PreprocessISelDAG() {
