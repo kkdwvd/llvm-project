@@ -843,6 +843,16 @@ uint32_t BTFDebug::addType(std::unique_ptr<BTFTypeBase> TypeEntry) {
 }
 
 void BTFDebug::visitBasicType(const DIBasicType *BTy, uint32_t &TypeId) {
+  // DWARF's unspecified type is what clang gives std::nullptr_t, without a
+  // size: a null pointer, which travels as a scalar of the pointer's size.
+  // Describe it as an integer of that size, named as in the debug info.
+  if (BTy->getTag() == dwarf::DW_TAG_unspecified_type) {
+    TypeId = addType(std::make_unique<BTFTypeInt>(dwarf::DW_ATE_unsigned, 64,
+                                                  0, BTy->getName()),
+                     BTy);
+    return;
+  }
+
   // Only int and binary floating point types are supported in BTF.
   uint32_t Encoding = BTy->getEncoding();
   std::unique_ptr<BTFTypeBase> TypeEntry;
@@ -1244,6 +1254,22 @@ void BTFDebug::visitDerivedType(const DIDerivedType *DTy, uint32_t &TypeId,
     }
   }
 
+  // A C++ pointer to member is a scalar of its size: to a data member, the
+  // member's offset, a ptrdiff_t by the Itanium C++ ABI; to a member function,
+  // the function's address or its vtable offset and the this adjustment, two
+  // words. BTF has no kind for it, nor has C a type, and the kernel and
+  // libbpf care about what travels in registers: an integer of that size,
+  // signed as a ptrdiff_t is. pahole refuses the tag; this is the one
+  // description a definition in another unit can agree with.
+  if (Tag == dwarf::DW_TAG_ptr_to_member_type) {
+    uint64_t Bits = DTy->getSizeInBits();
+    TypeId = addType(std::make_unique<BTFTypeInt>(dwarf::DW_ATE_signed, Bits,
+                                                  0, Bits > 64 ? "__int128"
+                                                               : "long"),
+                     DTy);
+    return;
+  }
+
   if (isPointerLikeTag(Tag) || Tag == dwarf::DW_TAG_typedef) {
     int TmpTypeId = genBTFTypeTags(DTy, -1);
     if (TmpTypeId >= 0) {
@@ -1319,7 +1345,8 @@ void BTFDebug::visitTypeEntry(const DIType *Ty, uint32_t &TypeId,
       if (const auto *DTy = dyn_cast<DIDerivedType>(Ty)) {
         while (DTy) {
           const DIType *BaseTy = DTy->getBaseType();
-          if (!BaseTy)
+          // A pointer to member is an integer, whatever it points to.
+          if (!BaseTy || DTy->getTag() == dwarf::DW_TAG_ptr_to_member_type)
             break;
 
           if (DIToIdMap.find(BaseTy) != DIToIdMap.end()) {
