@@ -32,6 +32,7 @@ define dso_local void @baz(ptr noalias nocapture sret(%struct.B) align 8 %agg.re
 ; CHECK:       .Lbaz$local:
 ; CHECK-NEXT:    .type .Lbaz$local,@function
 ; CHECK-NEXT:  # %bb.0: # %entry
+; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    exit
 entry:
   ret void

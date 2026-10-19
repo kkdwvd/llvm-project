@@ -818,6 +818,18 @@ BPFTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
 
+  // The verifier reads r0 at every exit, whatever the function returns, and
+  // refuses a pointer into the stack there. A function that returns an
+  // aggregate through the pointer its caller passed has that pointer in
+  // hand, and the register allocator may leave it in r0, which is free in a
+  // function that returns nothing. Return zero from such a function.
+  if (RVLocs.empty() && MF.getFunction().hasStructRetAttr()) {
+    Chain = DAG.getCopyToReg(Chain, DL, BPF::R0,
+                             DAG.getConstant(0, DL, MVT::i64), Glue);
+    Glue = Chain.getValue(1);
+    RetOps.push_back(DAG.getRegister(BPF::R0, MVT::i64));
+  }
+
   RetOps[0] = Chain; // Update chain.
 
   // Add the glue if we have it.
