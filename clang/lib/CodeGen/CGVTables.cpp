@@ -616,6 +616,12 @@ llvm::Constant *CodeGenVTables::maybeEmitThunk(GlobalDecl GD,
 
   CGM.SetLLVMFunctionAttributesForDefinition(GD.getDecl(), ThunkFn);
 
+  // The debug info of a function takes its linkage as the function starts:
+  // give the thunk its linkage now, as setThunkProperties() will again, so
+  // that the thunk of a class with internal linkage is local to its unit
+  // there too, as its symbol is.
+  CGM.setFunctionLinkage(GD, ThunkFn);
+
   // Thunks for variadic methods are special because in general variadic
   // arguments cannot be perfectly forwarded. In the general case, clang
   // implements such thunks by cloning the original function body. However, for
