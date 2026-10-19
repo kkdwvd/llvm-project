@@ -29,28 +29,52 @@ void BPFTargetLoweringObjectFileELF::initialize(MCContext &Ctx,
   LSDAEncoding = dwarf::DW_EH_PE_omit;
 }
 
-// libbpf takes the name of an executable section for the type of the programs
-// in it, and .text for the functions that programs call. So a function goes
-// to .text unless its section attribute names another, whatever ELF lowering
-// would otherwise choose: no .text.hot. or .text.unlikely. for a function that
-// is hot or cold, and no section of its own for -ffunction-sections. A
-// function in a COMDAT group gets a section of its own in the group, named
-// .text.<symbol>, which libbpf's linker joins to .text.
+// The name of a section means something to libbpf. An executable section
+// holds programs of the type it is named after, and .text the functions that
+// programs call. A data section is a map, named after it: .data, .rodata and
+// .bss are the maps of the global data, .data.<name>, .rodata.<name> and
+// .bss.<name> the custom maps that a program asks for by naming them, and the
+// mergeable .rodata.str1.<n> and .rodata.cst<n> of ELF lowering maps of their
+// own. So a global object goes to the section of its kind unless its section
+// attribute names another, whatever ELF lowering would otherwise choose: no
+// .text.hot. or .text.unlikely. for a function that is hot or cold, no .hot
+// or .unlikely prefix for data that -fpartition-static-data-sections finds
+// hot or cold, and no section of its own for -ffunction-sections or
+// -fdata-sections. A global object in a COMDAT group gets a section of its
+// own in the group, as the group needs, named .text.<symbol>,
+// .rodata.<symbol>, .data.<symbol> or .bss.<symbol>, which libbpf's linker
+// and loader join to the base section.
 MCSection *BPFTargetLoweringObjectFileELF::SelectSectionForGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
-  if (!Kind.isText())
+  const Comdat *C = GO->getComdat();
+
+  if (Kind.isText()) {
+    if (!C)
+      return getTextSection();
+
+    SmallString<128> Name(".text.");
+    TM.getNameWithPrefix(Name, GO, getMangler(), /*MayAlwaysUsePrivate=*/true);
+    return getContext().getELFSection(
+        Name, ELF::SHT_PROGBITS,
+        ELF::SHF_ALLOC | ELF::SHF_EXECINSTR | ELF::SHF_GROUP, /*EntrySize=*/0,
+        C->getName(), C->getSelectionKind() == Comdat::Any);
+  }
+
+  // A group member gets its section of the group from ELF lowering, and a
+  // mergeable string or constant the section of its entry size, which ELF
+  // lowering shares with or without -fdata-sections.
+  if (C || Kind.isMergeableCString() || Kind.isMergeableConst())
     return TargetLoweringObjectFileELF::SelectSectionForGlobal(GO, Kind, TM);
 
-  const Comdat *C = GO->getComdat();
-  if (!C)
-    return getTextSection();
-
-  SmallString<128> Name(".text.");
-  TM.getNameWithPrefix(Name, GO, getMangler(), /*MayAlwaysUsePrivate=*/true);
-  return getContext().getELFSection(
-      Name, ELF::SHT_PROGBITS,
-      ELF::SHF_ALLOC | ELF::SHF_EXECINSTR | ELF::SHF_GROUP, /*EntrySize=*/0,
-      C->getName(), C->getSelectionKind() == Comdat::Any);
+  if (Kind.isBSS())
+    return BSSSection;
+  if (Kind.isData())
+    return DataSection;
+  if (Kind.isReadOnly())
+    return ReadOnlySection;
+  if (Kind.isReadOnlyWithRel())
+    return DataRelROSection;
+  return TargetLoweringObjectFileELF::SelectSectionForGlobal(GO, Kind, TM);
 }
 
 // The exception table is data the personality routine reads through a pointer
