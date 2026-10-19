@@ -1105,6 +1105,10 @@ void BTFDebug::visitArrayType(const DICompositeType *CTy, uint32_t &TypeId) {
   // The array TypeId is the type id of the outermost dimension.
   TypeId = ElemTypeId;
 
+  addArrayIndexType();
+}
+
+void BTFDebug::addArrayIndexType() {
   // The IR does not have a type for array index while BTF wants one.
   // So create an array index type if there is none.
   if (!ArrayIndexTypeId) {
@@ -1112,6 +1116,18 @@ void BTFDebug::visitArrayType(const DICompositeType *CTy, uint32_t &TypeId) {
                                                    0, "__ARRAY_SIZE_TYPE__");
     ArrayIndexTypeId = addType(std::move(TypeEntry));
   }
+}
+
+uint32_t BTFDebug::getBytesTypeId(uint64_t Size) {
+  uint32_t &TypeId = BytesTypeIds[Size];
+  if (TypeId)
+    return TypeId;
+  if (!ByteTypeId)
+    ByteTypeId = addType(std::make_unique<BTFTypeInt>(
+        dwarf::DW_ATE_unsigned_char, 8, 0, "unsigned char"));
+  addArrayIndexType();
+  TypeId = addType(std::make_unique<BTFTypeArray>(ByteTypeId, Size));
+  return TypeId;
 }
 
 void BTFDebug::visitEnumType(const DICompositeType *CTy, uint32_t &TypeId) {
@@ -1861,6 +1877,12 @@ void BTFDebug::beginInstruction(const MachineInstr *MI) {
   PrevInstLoc = DL;
 }
 
+/// Whether the frontend made \p GV up rather than took it from the source.
+static bool isArtificial(const DIGlobalVariable *GV) {
+  const DIDerivedType *Decl = GV->getStaticDataMemberDeclaration();
+  return Decl && Decl->isArtificial();
+}
+
 void BTFDebug::processGlobals(bool ProcessingMapDef) {
   // Collect all types referenced by globals.
   const Module *M = MMI->getModule();
@@ -1899,22 +1921,32 @@ void BTFDebug::processGlobals(bool ProcessingMapDef) {
 
     SmallVector<DIGlobalVariableExpression *, 1> GVs;
     Global.getDebugInfo(GVs);
-
-    // No type information, mostly internal, skip it.
-    if (GVs.size() == 0)
-      continue;
+    DIGlobalVariable *DIGlobal =
+        GVs.empty() ? nullptr : GVs.front()->getVariable();
 
     uint32_t GVTypeId = 0;
-    DIGlobalVariable *DIGlobal = nullptr;
-    for (auto *GVE : GVs) {
-      DIGlobal = GVE->getVariable();
-      if (SecName.starts_with(".maps"))
-        visitMapDefType(DIGlobal->getType(), GVTypeId);
-      else {
-        const DIType *Ty = tryRemoveAtomicType(DIGlobal->getType());
-        visitTypeEntry(Ty, GVTypeId, false, false);
-      }
-      break;
+    if (!DIGlobal || isArtificial(DIGlobal)) {
+      // No source type: mostly internal, skip it. A global symbol that the
+      // frontend made on its own, such as a C++ type_info object or vtable,
+      // needs BTF all the same, since libbpf links a symbol to its definition
+      // in another object through BTF. The debug info of one, if any, is for
+      // a debugger and is not its type: clang describes a vtable's definition
+      // as a `void *` and an extern reference to it not at all. Describe it
+      // as the bytes it is, which matches what any other object says of the
+      // symbol, as libbpf ignores the size of an array.
+      if ((!DIGlobal && Global.hasLocalLinkage()) || ProcessingMapDef ||
+          Global.getName().starts_with("llvm."))
+        continue;
+      DIGlobal = nullptr;
+      GVTypeId = getBytesTypeId(
+          Global.isDeclarationForLinker()
+              ? 0
+              : Global.getGlobalSize(Global.getDataLayout()));
+    } else if (SecName.starts_with(".maps")) {
+      visitMapDefType(DIGlobal->getType(), GVTypeId);
+    } else {
+      const DIType *Ty = tryRemoveAtomicType(DIGlobal->getType());
+      visitTypeEntry(Ty, GVTypeId, false, false);
     }
 
     // Only support the following globals:
@@ -1948,7 +1980,8 @@ void BTFDebug::processGlobals(bool ProcessingMapDef) {
         std::make_unique<BTFKindVar>(Global.getName(), GVTypeId, GVarInfo);
     uint32_t VarId = addType(std::move(VarEntry));
 
-    processDeclAnnotations(DIGlobal->getAnnotations(), VarId, -1);
+    if (DIGlobal)
+      processDeclAnnotations(DIGlobal->getAnnotations(), VarId, -1);
 
     // An empty SecName means an extern variable without section attribute.
     if (SecName.empty())
