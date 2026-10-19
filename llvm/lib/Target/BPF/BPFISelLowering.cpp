@@ -972,17 +972,54 @@ SDValue BPFTargetLowering::LowerATOMIC_LOAD_STORE(SDValue Op,
   return Op;
 }
 
+// BPF has no fence instruction, but its atomics that fetch are fully ordered,
+// as the kernel's atomics that return a value are: the interpreter runs them
+// as atomic64_fetch_add() and friends, which the kernel's memory model orders
+// as if by smp_mb() before and after, the x86 JIT emits lock xadd and xchg,
+// the arm64 JIT ldaddal and swpal (or an exclusive loop ending in dmb ish),
+// the powerpc JIT puts sync around them. Which location such an atomic works
+// on does not change what it orders, so a full barrier is a fetch-add of zero
+// on a stack slot of the function's own, which no other CPU touches: the
+// smp_mb() of the selftests' bpf_atomic.h, and what X86 does with a locked
+// operation on the stack when it avoids mfence (emitLockedStackOp). Before
+// ALU32 (-mcpu=v3) a fetch-add is not selected (an add whose result is unused
+// is the non-fetching one, which orders nothing on arm64), so it is an
+// exchange, fully ordered all the same. The slot is written first: the
+// verifier refuses to read a stack slot that was never written.
+SDValue BPFTargetLowering::emitFence(SelectionDAG &DAG, const SDLoc &DL,
+                                     SDValue Chain) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  int FI = MF.getInfo<BPFMachineFunctionInfo>()->getFenceFrameIndex(MF);
+  MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(MF, FI);
+  SDValue Slot = DAG.getFrameIndex(FI, MVT::i64);
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i64);
+
+  Chain = DAG.getStore(Chain, DL, Zero, Slot, PtrInfo, Align(8));
+  MachineMemOperand *MMO = MF.getMachineMemOperand(
+      PtrInfo,
+      MachineMemOperand::MOLoad | MachineMemOperand::MOStore |
+          MachineMemOperand::MOVolatile,
+      LLT::scalar(64), Align(8), MMOMetadata(), SyncScope::System,
+      AtomicOrdering::SequentiallyConsistent);
+  unsigned Opcode = HasAlu32 ? ISD::ATOMIC_LOAD_ADD : ISD::ATOMIC_SWAP;
+  return DAG.getAtomic(Opcode, DL, MVT::i64, Chain, Slot, Zero, MMO)
+      .getValue(1);
+}
+
 SDValue BPFTargetLowering::LowerATOMIC_FENCE(SDValue Op,
                                              SelectionDAG &DAG) const {
   SDLoc DL(Op);
   SyncScope::ID FenceSSID =
       static_cast<SyncScope::ID>(Op.getConstantOperandVal(2));
 
+  // A signal fence orders nothing between CPUs: MEMBARRIER is a compiler
+  // barrier; it codegens to a no-op.
   if (FenceSSID == SyncScope::SingleThread)
-    // MEMBARRIER is a compiler barrier; it codegens to a no-op.
     return DAG.getNode(ISD::MEMBARRIER, DL, MVT::Other, Op.getOperand(0));
 
-  report_fatal_error("Runtime fence is not supported at the moment");
+  // BPF has no barrier weaker than a full one, and the same program runs on
+  // x86 and arm64, so acquire, release and acq_rel fences are full barriers.
+  return emitFence(DAG, DL, Op.getOperand(0));
 }
 
 static Function *createBPFUnreachable(Module *M) {
