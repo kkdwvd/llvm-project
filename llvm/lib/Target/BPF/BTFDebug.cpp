@@ -1657,7 +1657,13 @@ void BTFDebug::beginFunctionImpl(const MachineFunction *MF) {
 
   // Construct subprogram func proto type.
   uint32_t ProtoTypeId, FuncTypeId;
-  uint8_t Scope = SP->isLocalToUnit() ? BTF::FUNC_STATIC : BTF::FUNC_GLOBAL;
+  // libbpf and the kernel match a FUNC to its ELF symbol: its linkage is the
+  // symbol's, from the function, not from the subprogram. clang marks a
+  // subprogram local to its unit as it starts the function, before it gives
+  // a thunk its linkage, so the thunk of a class with internal linkage has
+  // a subprogram that is not local while its symbol is.
+  uint8_t Scope = MF->getFunction().hasLocalLinkage() ? BTF::FUNC_STATIC
+                                                       : BTF::FUNC_GLOBAL;
   bool IsNocall = SP->getType()->getCC() == dwarf::DW_CC_nocall;
   bool UseFilteredParams = false;
   bool VoidReturn = MF->getFunction().getReturnType()->isVoidTy();
