@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -gotol-abs-low-bound 0 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -gotol-abs-low-bound 0 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 
 ; unwind_goto has a 16-bit offset like other conditional jumps, and it has to stay
 ; right after the call.

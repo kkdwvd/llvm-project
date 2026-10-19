@@ -56,6 +56,8 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeBPFTarget() {
   initializeBPFDAGToDAGISelLegacyPass(PR);
   initializeBPFMISimplifyPatchableLegacyPass(PR);
   initializeBPFMIPreEmitCheckingLegacyPass(PR);
+  initializeBPFUnwindLowerLegacyPass(PR);
+  initializeBPFUnwindPrepareLegacyPass(PR);
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
@@ -117,7 +119,7 @@ void BPFPassConfig::addIRPasses() {
   addPass(createBPFCheckAndAdjustIRLegacyPass());
 
   TargetPassConfig::addIRPasses();
-  addPass(createBPFUnwindPreparePass());
+  addPass(createBPFUnwindPrepareLegacyPass());
 }
 
 TargetTransformInfo
@@ -148,7 +150,7 @@ void BPFPassConfig::addMachineSSAOptimization() {
 }
 
 void BPFPassConfig::addPreEmitPass() {
-  addPass(createBPFUnwindLowerPass());
+  addPass(createBPFUnwindLowerLegacyPass());
   addPass(createBPFMIPreEmitCheckingLegacyPass());
   if (!DisableMIPeephole) {
     addPass(createBPFMIExpandStackArgPseudosLegacyPass());

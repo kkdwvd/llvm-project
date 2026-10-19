@@ -37,8 +37,23 @@ public:
 };
 
 ModulePass *createBPFCheckAndAdjustIRLegacyPass();
-ModulePass *createBPFUnwindPreparePass();
-FunctionPass *createBPFUnwindLowerPass();
+/// Make every call that may unwind an invoke. See BPFUnwind.cpp.
+class BPFUnwindPreparePass
+    : public RequiredPassInfoMixin<BPFUnwindPreparePass> {
+public:
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM);
+};
+
+ModulePass *createBPFUnwindPrepareLegacyPass();
+
+/// Lower unwinding to unwind_goto and unwind_exit. See BPFUnwind.cpp.
+class BPFUnwindLowerPass : public RequiredPassInfoMixin<BPFUnwindLowerPass> {
+public:
+  PreservedAnalyses run(MachineFunction &MF,
+                        MachineFunctionAnalysisManager &MFAM);
+};
+
+FunctionPass *createBPFUnwindLowerLegacyPass();
 
 /// Whether a call of \p Callee starts or carries on an unwind, which the
 /// backend lowers instead of making the call. See BPFUnwind.cpp.
@@ -107,6 +122,8 @@ void initializeBPFMIPreEmitCheckingLegacyPass(PassRegistry &);
 void initializeBPFMIExpandStackArgPseudosLegacyPass(PassRegistry &);
 void initializeBPFMIPreEmitPeepholeLegacyPass(PassRegistry &);
 void initializeBPFMISimplifyPatchableLegacyPass(PassRegistry &);
+void initializeBPFUnwindLowerLegacyPass(PassRegistry &);
+void initializeBPFUnwindPrepareLegacyPass(PassRegistry &);
 
 class BPFAbstractMemberAccessPass
     : public RequiredPassInfoMixin<BPFAbstractMemberAccessPass> {

@@ -75,11 +75,7 @@ bool llvm::isBPFUnwindCallee(const GlobalValue &Callee,
 namespace {
 
 /// Make every call that may unwind an invoke: it ends its block and has a pad.
-struct BPFUnwindPrepare : public ModulePass {
-  static char ID;
-  BPFUnwindPrepare() : ModulePass(ID) {}
-  StringRef getPassName() const override { return "BPF Unwind Prepare"; }
-
+struct BPFUnwindPrepare {
   static bool isRaise(const CallBase &CB) {
     const auto *F = dyn_cast<Function>(CB.getCalledOperand());
     return F && F->isDeclaration() && F->getName() == UnwindRaise;
@@ -91,7 +87,7 @@ struct BPFUnwindPrepare : public ModulePass {
            !isa<IntrinsicInst>(CB);
   }
 
-  bool runOnModule(Module &M) override {
+  bool run(Module &M) {
     bool Changed = false;
 
     for (Function &F : M) {
@@ -136,11 +132,7 @@ struct BPFUnwindPrepare : public ModulePass {
 
 /// After register allocation, which took call -> pad for an EH edge and so
 /// keeps only r6-r9 and the stack alive over it, turn the edge into a branch.
-struct BPFUnwindLower : public MachineFunctionPass {
-  static char ID;
-  BPFUnwindLower() : MachineFunctionPass(ID) {}
-  StringRef getPassName() const override { return "BPF Unwind Lower"; }
-
+struct BPFUnwindLower {
   const TargetLowering *TLI = nullptr;
 
   bool leavesFrame(const MachineInstr &MI) const {
@@ -178,7 +170,7 @@ struct BPFUnwindLower : public MachineFunctionPass {
     return nullptr;
   }
 
-  bool runOnMachineFunction(MachineFunction &MF) override {
+  bool run(MachineFunction &MF) {
     const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
     const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
     TLI = MF.getSubtarget().getTargetLowering();
@@ -305,12 +297,48 @@ struct BPFUnwindLower : public MachineFunctionPass {
   }
 };
 
+struct BPFUnwindPrepareLegacy : public ModulePass {
+  static char ID;
+  BPFUnwindPrepareLegacy() : ModulePass(ID) {}
+  StringRef getPassName() const override { return "BPF Unwind Prepare"; }
+  bool runOnModule(Module &M) override { return BPFUnwindPrepare().run(M); }
+};
+
+struct BPFUnwindLowerLegacy : public MachineFunctionPass {
+  static char ID;
+  BPFUnwindLowerLegacy() : MachineFunctionPass(ID) {}
+  StringRef getPassName() const override { return "BPF Unwind Lower"; }
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    return BPFUnwindLower().run(MF);
+  }
+};
+
 } // namespace
 
-char BPFUnwindPrepare::ID = 0;
-char BPFUnwindLower::ID = 0;
+char BPFUnwindPrepareLegacy::ID = 0;
+char BPFUnwindLowerLegacy::ID = 0;
 
-ModulePass *llvm::createBPFUnwindPreparePass() {
-  return new BPFUnwindPrepare();
+INITIALIZE_PASS(BPFUnwindPrepareLegacy, "bpf-unwind-prepare",
+                "BPF Unwind Prepare", false, false)
+INITIALIZE_PASS(BPFUnwindLowerLegacy, "bpf-unwind-lower", "BPF Unwind Lower",
+                false, false)
+
+ModulePass *llvm::createBPFUnwindPrepareLegacyPass() {
+  return new BPFUnwindPrepareLegacy();
 }
-FunctionPass *llvm::createBPFUnwindLowerPass() { return new BPFUnwindLower(); }
+FunctionPass *llvm::createBPFUnwindLowerLegacyPass() {
+  return new BPFUnwindLowerLegacy();
+}
+
+PreservedAnalyses BPFUnwindPreparePass::run(Module &M,
+                                            ModuleAnalysisManager &MAM) {
+  return BPFUnwindPrepare().run(M) ? PreservedAnalyses::none()
+                                   : PreservedAnalyses::all();
+}
+
+PreservedAnalyses
+BPFUnwindLowerPass::run(MachineFunction &MF,
+                        MachineFunctionAnalysisManager &MFAM) {
+  return BPFUnwindLower().run(MF) ? getMachineFunctionPassPreservedAnalyses()
+                                  : PreservedAnalyses::all();
+}

@@ -65,6 +65,8 @@ void BPFCodeGenPassBuilder::addIRPasses(PassManagerWrapper &PMW) {
   addModulePass(BPFCheckAndAdjustIRPass(), PMW);
 
   Base::addIRPasses(PMW);
+  flushFPMsToMPM(PMW);
+  addModulePass(BPFUnwindPreparePass(), PMW);
 }
 
 Error BPFCodeGenPassBuilder::addInstSelector(PassManagerWrapper &PMW) {
@@ -106,6 +108,7 @@ void BPFCodeGenPassBuilder::addMachineSSAOptimization(PassManagerWrapper &PMW) {
 }
 
 void BPFCodeGenPassBuilder::addPreEmitPass(PassManagerWrapper &PMW) {
+  addMachineFunctionPass(BPFUnwindLowerPass(), PMW);
   addMachineFunctionPass(BPFMIPreEmitCheckingPass(), PMW);
   if (!DisableMIPeephole) {
     addMachineFunctionPass(BPFMIExpandStackArgPseudosPass(), PMW);

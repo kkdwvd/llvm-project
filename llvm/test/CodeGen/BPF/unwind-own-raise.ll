@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -filetype=asm -o - %s | FileCheck %s
 
 ; A program that defines _Unwind_RaiseException() gets what it defines: the call
 ; is an ordinary one.

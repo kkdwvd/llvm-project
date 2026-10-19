@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -filetype=obj -o %t %s
 ; RUN: llvm-readelf -S -s %t | FileCheck --check-prefix=OBJ %s
 
