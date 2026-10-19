@@ -16,10 +16,15 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Register.h"
+#include <optional>
 
 namespace llvm {
 
 class BPFMachineFunctionInfo : public MachineFunctionInfo {
+  /// The stack slot that every fence of the function makes its atomic on,
+  /// created by the first fence.
+  std::optional<int> FenceFrameIndex;
+
   /// The virtual register each incoming stack argument is loaded into, with
   /// its offset from r11, recorded by LowerFormalArguments for
   /// emitFunctionEntryCode to emit the loads at the entry of the function,
@@ -34,6 +39,8 @@ public:
   clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
         const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
       const override;
+
+  int getFenceFrameIndex(MachineFunction &MF);
 
   void addIncomingStackArg(Register VReg, int Offset) {
     IncomingStackArgs.emplace_back(VReg, Offset);

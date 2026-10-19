@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "BPFMachineFunctionInfo.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 
 using namespace llvm;
 
@@ -15,4 +16,10 @@ MachineFunctionInfo *BPFMachineFunctionInfo::clone(
     const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
     const {
   return DestMF.cloneInfo<BPFMachineFunctionInfo>(*this);
+}
+
+int BPFMachineFunctionInfo::getFenceFrameIndex(MachineFunction &MF) {
+  if (!FenceFrameIndex)
+    FenceFrameIndex = MF.getFrameInfo().CreateStackObject(8, Align(8), false);
+  return *FenceFrameIndex;
 }
