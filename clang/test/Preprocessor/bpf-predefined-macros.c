@@ -96,6 +96,11 @@ int ab;
 int ac;
 #endif
 
+// BPF code runs on the CPU of the host that loads it; these are the values of
+// x86-64 and of the kernel's SMP_CACHE_BYTES on x86-64 and arm64.
+int destructive = __GCC_DESTRUCTIVE_SIZE;
+int constructive = __GCC_CONSTRUCTIVE_SIZE;
+
 // CHECK: int b;
 // CHECK: int c;
 // CHECK-NOT: int d;
@@ -183,3 +188,6 @@ int ac;
 
 // CPU_PROBE: int f;
 // CPU_PROBE: int ac;
+
+// CHECK: int destructive = 64;
+// CHECK: int constructive = 64;
