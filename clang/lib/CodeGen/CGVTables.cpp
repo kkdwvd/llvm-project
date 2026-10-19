@@ -282,7 +282,7 @@ CodeGenFunction::GenerateVarArgsThunk(llvm::Function *Fn,
 
 void CodeGenFunction::StartThunk(llvm::Function *Fn, GlobalDecl GD,
                                  const CGFunctionInfo &FnInfo,
-                                 bool IsUnprototyped) {
+                                 const ThunkInfo &Thunk, bool IsUnprototyped) {
   assert(!CurGD.getDecl() && "CurGD was already set!");
   CurGD = GD;
   CurFuncIsThunk = true;
@@ -325,6 +325,11 @@ void CodeGenFunction::StartThunk(llvm::Function *Fn, GlobalDecl GD,
   CXXThisValue = CXXABIThisValue;
   CurCodeDecl = MD;
   CurFuncDecl = MD;
+
+  if (CGDebugInfo *DI = getDebugInfo())
+    DI->completeThunk(Fn, ResultType, FunctionArgs,
+                      Thunk.ThisType ? QualType(Thunk.ThisType, 0)
+                                     : QualType());
 }
 
 void CodeGenFunction::FinishThunk() {
@@ -504,7 +509,7 @@ void CodeGenFunction::generateThunk(llvm::Function *Fn,
                                     const CGFunctionInfo &FnInfo, GlobalDecl GD,
                                     const ThunkInfo &Thunk,
                                     bool IsUnprototyped) {
-  StartThunk(Fn, GD, FnInfo, IsUnprototyped);
+  StartThunk(Fn, GD, FnInfo, Thunk, IsUnprototyped);
   // Create a scope with an artificial location for the body of this function.
   auto AL = ApplyDebugLocation::CreateArtificial(*this);
 
