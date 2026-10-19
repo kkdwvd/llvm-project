@@ -375,9 +375,10 @@ class BTFDebug : public DebugHandlerBase {
   void processDeclAnnotations(DINodeArray Annotations, uint32_t BaseTypeId,
                               int ComponentId);
 
-  /// Generate types for DISubprogram and it's arguments.
+  /// Generate types for the DISubprogram of \p F and its arguments.
   uint32_t processDISubprogram(
-      const DISubprogram *SP, uint32_t ProtoTypeId, uint8_t Scope,
+      const Function &F, const DISubprogram *SP, uint32_t ProtoTypeId,
+      uint8_t Scope,
       const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap = nullptr);
 
   /// Generate BTF type_tag's. If BaseTypeId is nonnegative, the last

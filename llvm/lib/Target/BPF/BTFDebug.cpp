@@ -58,15 +58,6 @@ static const DIType *tryRemoveAtomicType(const DIType *Ty) {
   return Ty;
 }
 
-/// The name a function has in BTF. libbpf and the kernel match a function's
-/// BTF to its ELF symbol by name, so a C++ function, whose symbol is its
-/// mangled linkage name, is named that way in BTF too; a C function has no
-/// linkage name and keeps its own.
-static StringRef btfFuncName(const DISubprogram *SP) {
-  StringRef LinkageName = SP->getLinkageName();
-  return LinkageName.empty() ? SP->getName() : LinkageName;
-}
-
 /// C++ references have no BTF kind of their own; they are pointers at the
 /// ABI level and are encoded as BTF_KIND_PTR.
 static bool isPointerLikeTag(unsigned Tag) {
@@ -929,10 +920,15 @@ void BTFDebug::processDeclAnnotations(DINodeArray Annotations,
 }
 
 uint32_t BTFDebug::processDISubprogram(
-    const DISubprogram *SP, uint32_t ProtoTypeId, uint8_t Scope,
-    const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap) {
-  auto FuncTypeEntry =
-      std::make_unique<BTFTypeFunc>(btfFuncName(SP), ProtoTypeId, Scope);
+    const Function &F, const DISubprogram *SP, uint32_t ProtoTypeId,
+    uint8_t Scope, const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap) {
+  // libbpf and the kernel match a function's BTF to its ELF symbol by name,
+  // so a function is named by its symbol: a C++ function by its mangled name,
+  // which is not always the linkage name of its subprogram. A declaration of
+  // a constructor or destructor has the name that stands for all of its
+  // variants (C4, D4), and a call is of one of them (C1, D1).
+  auto FuncTypeEntry = std::make_unique<BTFTypeFunc>(
+      Asm->getSymbol(&F)->getName(), ProtoTypeId, Scope);
   uint32_t FuncId = addType(std::move(FuncTypeEntry));
 
   // Process argument annotations.
@@ -1690,7 +1686,8 @@ void BTFDebug::beginFunctionImpl(const MachineFunction *MF) {
           SP->getType(), AliveParamIndices.size(), FuncArgNames, true,
           AliveParamIndices, VoidReturn);
       ProtoTypeId = addType(std::move(TypeEntry));
-      FuncTypeId = processDISubprogram(SP, ProtoTypeId, Scope, &ArgIndexMap);
+      FuncTypeId = processDISubprogram(MF->getFunction(), SP, ProtoTypeId,
+                                       Scope, &ArgIndexMap);
     }
   }
 
@@ -1699,7 +1696,8 @@ void BTFDebug::beginFunctionImpl(const MachineFunction *MF) {
     // type if compiler removed it.
     visitSubroutineType(SP->getType(), true, FuncArgNames, ProtoTypeId,
                         VoidReturn);
-    FuncTypeId = processDISubprogram(SP, ProtoTypeId, Scope);
+    FuncTypeId =
+        processDISubprogram(MF->getFunction(), SP, ProtoTypeId, Scope);
   }
 
   for (const auto &TypeEntry : TypeEntries)
@@ -2086,7 +2084,8 @@ void BTFDebug::processFuncPrototypes(const Function *F) {
   uint32_t ProtoTypeId;
   const SmallDenseMap<uint32_t, StringRef> FuncArgNames;
   visitSubroutineType(SP->getType(), false, FuncArgNames, ProtoTypeId);
-  uint32_t FuncId = processDISubprogram(SP, ProtoTypeId, BTF::FUNC_EXTERN);
+  uint32_t FuncId =
+      processDISubprogram(*F, SP, ProtoTypeId, BTF::FUNC_EXTERN);
 
   if (F->hasSection()) {
     StringRef SecName = F->getSection();
