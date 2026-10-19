@@ -34,6 +34,7 @@ add_llvm_target(BPFCodeGen
   BPFIRPeephole.cpp
   BPFISelDAGToDAG.cpp
   BPFISelLowering.cpp
+  BPFMachineFunctionInfo.cpp
   BPFMCInstLower.cpp
   BPFPreserveDIType.cpp
   BPFPreserveStaticOffset.cpp
