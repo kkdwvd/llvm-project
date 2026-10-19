@@ -3580,10 +3580,11 @@ void SelectionDAGBuilder::visitInvoke(const InvokeInst &I) {
     case Intrinsic::bpf_unwind_exit: {
       const TargetLowering &TLI = DAG.getTargetLoweringInfo();
       MCSymbol *BeginLabel;
-      std::array<SDValue, 2> Ops = {
+      std::array<SDValue, 3> Ops = {
           lowerStartEH(getControlRoot(), EHPadBB, BeginLabel),
           DAG.getTargetConstant(Intrinsic::bpf_unwind_exit, getCurSDLoc(),
-                                TLI.getPointerTy(DAG.getDataLayout()))};
+                                TLI.getPointerTy(DAG.getDataLayout())),
+          getValue(I.getArgOperand(0))};
       SDValue Chain =
           DAG.getNode(ISD::INTRINSIC_VOID, getCurSDLoc(), MVT::Other, Ops);
       DAG.setRoot(lowerEndEH(Chain, &I, EHPadBB, BeginLabel));

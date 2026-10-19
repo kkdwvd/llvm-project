@@ -6,7 +6,7 @@
 
 define void @cannot() nounwind uwtable {
 entry:
-  call void @llvm.bpf.unwind.exit()
+  call void @llvm.bpf.unwind.exit(ptr null)
   unreachable
 }
 

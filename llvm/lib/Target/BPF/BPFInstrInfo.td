@@ -869,10 +869,11 @@ let isReturn = 1, isTerminator = 1, hasDelaySlot=0, isBarrier = 1,
 }
 
 // llvm.bpf.unwind.exit. BPFUnwindLower replaces it with unwind_exit, or with a
-// branch to the landing pad when invoked.
+// branch to the landing pad when invoked, after moving the exception object
+// into r0.
 let isCall = 1, hasSideEffects = 1, isCodeGenOnly = 1 in
-def UNWIND_EXIT_PSEUDO : Pseudo<(outs), (ins), "#UNWIND_EXIT_PSEUDO",
-                                [(int_bpf_unwind_exit)]>;
+def UNWIND_EXIT_PSEUDO : Pseudo<(outs), (ins GPR:$exn), "#UNWIND_EXIT_PSEUDO",
+                                [(int_bpf_unwind_exit GPR:$exn)]>;
 
 // ADJCALLSTACKDOWN/UP pseudo insns
 let Defs = [R11], Uses = [R11], isCodeGenOnly = 1 in {

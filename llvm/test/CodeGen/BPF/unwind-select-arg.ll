@@ -19,8 +19,9 @@ define void @f(ptr %v, i64 %n, ptr %x) uwtable personality ptr @__gcc_personalit
 ; CHECK-NEXT:  unwind_goto [[PAD:.LBB0_[0-9]+]]
 ; CHECK:       exit
 ; CHECK:       [[PAD]]:
-; CHECK:       call cleanup
-; CHECK-NEXT:  r0 = 0
+; CHECK-NEXT:  [[EXN:r[6-9]]] = r0
+; CHECK-NEXT:  call cleanup
+; CHECK-NEXT:  r0 = [[EXN]]
 ; CHECK-NEXT:  unwind_exit
 entry:
   %small = icmp ult i64 %n, 1025

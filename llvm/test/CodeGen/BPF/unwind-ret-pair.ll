@@ -3,7 +3,8 @@
 
 ; A value of 9 to 16 bytes is returned in r0 and r2. The verifier checks both
 ; at every exit of a global function, unwind_exit included, so unwind_exit
-; sets both, whatever the cleanups on the way left in r2.
+; sets both, whatever the cleanups on the way left in r2. r0 is the exception
+; object.
 
 declare void @lock() nounwind
 declare void @unlock() nounwind
@@ -22,7 +23,7 @@ entry:
 
 throw:
   store i32 1, ptr @exc
-  invoke void @llvm.bpf.unwind.exit()
+  invoke void @llvm.bpf.unwind.exit(ptr @exc)
           to label %unreachable unwind label %lpad
 
 lpad:
@@ -46,8 +47,9 @@ unreachable:
 ; CHECK-NEXT:    r0 = 7
 ; CHECK-NEXT:    r2 = r6
 ; CHECK-NEXT:    exit
-; CHECK:         call unlock
-; CHECK-NEXT:    r0 = 0
+; CHECK:         [[EXN:r[6-9]]] = r0
+; CHECK-NEXT:    call unlock
+; CHECK-NEXT:    r0 = [[EXN]]
 ; CHECK-NEXT:    r2 = 0
 ; CHECK-NEXT:    unwind_exit
 
@@ -65,7 +67,6 @@ entry:
 ; CHECK-NEXT:    unwind_goto [[PAD:.LBB[0-9_]+]]
 ; CHECK:         exit
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    r2 = 0
 ; CHECK-NEXT:    unwind_exit
 
@@ -73,12 +74,13 @@ entry:
 ; come from its type.
 define i128 @always_throws() uwtable {
 entry:
-  call void @llvm.bpf.unwind.exit()
+  call void @llvm.bpf.unwind.exit(ptr @exc)
   unreachable
 }
 
 ; CHECK-LABEL: always_throws:
-; CHECK:         r0 = 0
+; CHECK:         r1 = exc ll
+; CHECK-NEXT:    r0 = r1
 ; CHECK-NEXT:    r2 = 0
 ; CHECK-NEXT:    unwind_exit
 ; CHECK-NEXT:  .Lfunc_end
@@ -93,5 +95,4 @@ entry:
 ; CHECK-LABEL: one_register:
 ; CHECK:         unwind_goto [[PAD:.LBB[0-9_]+]]
 ; CHECK:       [[PAD]]:
-; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    unwind_exit

@@ -1,7 +1,7 @@
 ; RUN: llvm-as -disable-output %s
 
 define void @f() personality ptr @__gcc_personality_v0 {
-  invoke void @llvm.bpf.unwind.exit()
+  invoke void @llvm.bpf.unwind.exit(ptr null)
           to label %cont unwind label %pad
 
 cont:

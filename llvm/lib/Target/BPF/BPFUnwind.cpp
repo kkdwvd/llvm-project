@@ -8,16 +8,25 @@
 //
 // There are two ways to leave a frame, and a call that may unwind is followed
 // by an insn that tells them apart:
-//   ret                           exit
-//   invoke f() unwind pad         call f; unwind_goto pad
-//   resume                        r0 = 0; unwind_exit
-//   call llvm.bpf.unwind.exit     r0 = 0; unwind_exit
-//   invoke llvm.bpf.unwind.exit   goto pad
+//   ret                               exit
+//   invoke f() unwind pad             call f; unwind_goto pad
+//   resume                            r0 = exn; unwind_exit
+//   call llvm.bpf.unwind.exit(exn)    r0 = exn; unwind_exit
+//   invoke llvm.bpf.unwind.exit(exn)  r0 = exn; goto pad
 // unwind_goto is taken when the callee left with unwind_exit. No register says
 // so: how one insn tells the other is up to the JIT. Otherwise unwind_exit is
-// exit, hence r0, and r2 as well in a function that returns more than 8 bytes.
-// A pad expects the exception object in r0. There is none, so a pad that looks
-// at it starts with r0 = 0.
+// exit, hence r0, and r2 as well where the return value takes r0 and r2: the
+// verifier checks every register of it at both.
+//
+// The exception object travels in r0: unwind_exit returns it as exit returns
+// a value, and a pad finds it there, in the exception pointer register. It is
+// what was passed to llvm.bpf.unwind.exit, and a pad that resumes passes on
+// what it got. A program is no special case: out of it, unwind_exit is exit,
+// and the verifier's checks of the program's return value keep the kernel
+// safe. The compiler does not pick a return value for an exception that
+// escapes: 0 means one thing to one program type and another to the next
+// (XDP_ABORTED, drop for cgroup skb, allow for LSM, CPU 0 for sched_ext's
+// select_cpu), and which functions are programs is the loader's convention.
 //
 // There is no unwinder library. A runtime starts an unwind by calling
 // llvm.bpf.unwind.exit, which leaves the frame with unwind_exit. resume, which
@@ -31,8 +40,7 @@
 #include "BPF.h"
 #include "BPFSubtarget.h"
 #include "llvm/ADT/DepthFirstIterator.h"
-#include "llvm/ADT/SetVector.h"
-#include "llvm/CodeGen/LivePhysRegs.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -69,6 +77,16 @@ struct BPFUnwindPrepare : public ModulePass {
     return UnwindExit;
   }
 
+  /// What was thrown, the first member of what a landing pad produces.
+  static Value *getException(IRBuilder<> &B, Value *V) {
+    if (V->getType()->isPointerTy())
+      return V;
+    auto *Ty = dyn_cast<StructType>(V->getType());
+    if (Ty && Ty->getNumElements() && Ty->getElementType(0)->isPointerTy())
+      return B.CreateExtractValue(V, 0, "exn");
+    return ConstantPointerNull::get(PointerType::getUnqual(B.getContext()));
+  }
+
   static bool mayUnwind(const Instruction &I) {
     const auto *CB = dyn_cast<CallBase>(&I);
     return CB && !CB->doesNotThrow() && !CB->isInlineAsm() &&
@@ -87,8 +105,8 @@ struct BPFUnwindPrepare : public ModulePass {
       // Replace resume even if F cannot unwind, so BPFUnwindLower reports it.
       for (BasicBlock &BB : F) {
         if (auto *RI = dyn_cast<ResumeInst>(BB.getTerminator())) {
-          CallInst::Create(getUnwindExit(M), "", RI->getIterator())
-              ->setDebugLoc(RI->getDebugLoc());
+          IRBuilder<> B(RI);
+          B.CreateCall(getUnwindExit(M), {getException(B, RI->getValue())});
           changeToUnreachable(RI);
           Changed = true;
         }
@@ -115,7 +133,7 @@ struct BPFUnwindPrepare : public ModulePass {
       LandingPadInst *LP = B.CreateLandingPad(
           StructType::get(PointerType::getUnqual(C), Type::getInt32Ty(C)), 0);
       LP->setCleanup(true);
-      B.CreateCall(getUnwindExit(M));
+      B.CreateCall(getUnwindExit(M), {getException(B, LP)});
       B.CreateUnreachable();
       for (CallInst *CI : Calls)
         changeToInvokeAndSplitBasicBlock(CI, Pad);
@@ -130,6 +148,15 @@ struct BPFUnwindLower : public MachineFunctionPass {
   static char ID;
   BPFUnwindLower() : MachineFunctionPass(ID) {}
   StringRef getPassName() const override { return "BPF Unwind Lower"; }
+
+  /// llvm.bpf.unwind.exit leaves with the exception object in r0.
+  static void moveException(MachineInstr &MI, const TargetInstrInfo &TII) {
+    const MachineOperand &Exn = MI.getOperand(0);
+    if (Exn.getReg() != BPF::R0)
+      BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), TII.get(BPF::MOV_rr),
+              BPF::R0)
+          .addReg(Exn.getReg(), getKillRegState(Exn.isKill()));
+  }
 
   /// Nothing after \p MI in its block runs: \p Succ, if any, is what follows.
   static void endBlockAfter(MachineInstr &MI, MachineBasicBlock *Succ) {
@@ -167,7 +194,6 @@ struct BPFUnwindLower : public MachineFunctionPass {
     DenseMap<MCSymbol *, MachineBasicBlock *> Begin;
     SmallVector<std::pair<MachineInstr *, MachineBasicBlock *>, 8> Sites;
     SmallVector<MachineInstr *, 8> Labels, Resumes;
-    SmallSetVector<MachineBasicBlock *, 8> Pads;
 
     const char *Msg = unsupported(MF);
     if (Msg) {
@@ -231,12 +257,19 @@ struct BPFUnwindLower : public MachineFunctionPass {
       const auto *II =
           dyn_cast_or_null<InvokeInst>(MBB->getBasicBlock()->getTerminator());
 
-      Pads.insert(Pad);
       if (Call->getOpcode() == BPF::UNWIND_EXIT_PSEUDO) {
+        // The pad expects the exception object in r0.
+        moveException(*Call, TII);
         endBlockAfter(*Call, Pad);
         BuildMI(MBB, DL, TII.get(BPF::JMP)).addMBB(Pad);
         Call->eraseFromParent();
-      } else if (II && II->doesNotReturn()) {
+        continue;
+      }
+
+      // The callee sets r0 also when it unwinds: to the exception object.
+      // Without the def, r0 would look live over the call into the pad.
+      Call->addRegisterDefined(BPF::R0, &TRI);
+      if (II && II->doesNotReturn()) {
         // Nothing sensible follows the call, but something has to.
         endBlockAfter(*Call, Pad);
         BuildMI(MBB, DL, TII.get(BPF::UNWIND_GOTO)).addMBB(Pad);
@@ -251,19 +284,8 @@ struct BPFUnwindLower : public MachineFunctionPass {
       }
     }
 
-    for (MachineBasicBlock *Pad : Pads) {
-      LivePhysRegs Live(TRI);
-      Live.addLiveOuts(*Pad);
-      for (MachineInstr &MI : reverse(*Pad))
-        Live.stepBackward(MI);
-      if (!Live.available(MF.getRegInfo(), BPF::R0))
-        BuildMI(*Pad, Pad->begin(), DebugLoc(), TII.get(BPF::MOV_ri), BPF::R0)
-            .addImm(0);
-      Pad->removeLiveIn(BPF::R0);
-    }
-
     // unwind_exit returns what exit returns: a value of more than 8 bytes is in
-    // r0 and r2.
+    // r0 and r2. r0 holds the exception object.
     SmallVector<ISD::OutputArg, 2> Outs;
     const Function &F = MF.getFunction();
     GetReturnInfo(F.getCallingConv(), F.getReturnType(), F.getAttributes(),
@@ -274,7 +296,7 @@ struct BPFUnwindLower : public MachineFunctionPass {
       MachineBasicBlock *MBB = Call->getParent();
       DebugLoc DL = Call->getDebugLoc();
 
-      BuildMI(*MBB, Call, DL, TII.get(BPF::MOV_ri), BPF::R0).addImm(0);
+      moveException(*Call, TII);
       MachineInstrBuilder Exit =
           BuildMI(*MBB, Call, DL, TII.get(BPF::UNWIND_EXIT))
               .addReg(BPF::R0, RegState::Implicit);

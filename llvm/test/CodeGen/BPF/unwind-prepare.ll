@@ -1,16 +1,16 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -print-after=dwarf-eh-prepare -filetype=null \
 ; RUN:   %s 2>&1 | FileCheck %s
 
-; resume is llvm.bpf.unwind.exit before DwarfEHPrepare runs, so it has no
-; resume to turn into a call of _Unwind_Resume().
+; resume is llvm.bpf.unwind.exit of the exception object before DwarfEHPrepare
+; runs, so it has no resume to turn into a call of _Unwind_Resume().
 
 declare void @may_throw()
 declare void @bpf_free(ptr)
 declare i32 @rust_eh_personality(i32, i64, ptr, ptr)
 
-define void @cleanup(ptr %node) uwtable personality ptr @rust_eh_personality {
+define void @cleanup(ptr %node, ptr %exn) uwtable personality ptr @rust_eh_personality {
 entry:
-  invoke void @llvm.bpf.unwind.exit()
+  invoke void @llvm.bpf.unwind.exit(ptr %exn)
           to label %failed unwind label %cleanup
 
 failed:
@@ -24,7 +24,7 @@ cleanup:
 
 ; CHECK-LABEL: define void @cleanup(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    invoke void @llvm.bpf.unwind.exit()
+; CHECK-NEXT:    invoke void @llvm.bpf.unwind.exit(ptr %exn)
 ; CHECK-NEXT:            to label %failed unwind label %cleanup{{$}}
 ; CHECK-EMPTY:
 ; CHECK-NEXT:  failed:
@@ -34,7 +34,8 @@ cleanup:
 ; CHECK-NEXT:    %lp = landingpad { ptr, i32 }
 ; CHECK-NEXT:            cleanup{{$}}
 ; CHECK-NEXT:    call void @bpf_free(ptr %node) #{{[0-9]+}}{{$}}
-; CHECK-NEXT:    call void @llvm.bpf.unwind.exit(){{$}}
+; CHECK-NEXT:    %exn1 = extractvalue { ptr, i32 } %lp, 0{{$}}
+; CHECK-NEXT:    call void @llvm.bpf.unwind.exit(ptr %exn1){{$}}
 ; CHECK-NEXT:    unreachable{{$}}
 ; CHECK-NEXT:  }
 
@@ -56,6 +57,7 @@ entry:
 ; CHECK-NEXT:  unwind.resume:
 ; CHECK-NEXT:    %0 = landingpad { ptr, i32 }
 ; CHECK-NEXT:            cleanup{{$}}
-; CHECK-NEXT:    call void @llvm.bpf.unwind.exit(){{$}}
+; CHECK-NEXT:    %exn = extractvalue { ptr, i32 } %0, 0{{$}}
+; CHECK-NEXT:    call void @llvm.bpf.unwind.exit(ptr %exn){{$}}
 ; CHECK-NEXT:    unreachable{{$}}
 ; CHECK-NEXT:  }
