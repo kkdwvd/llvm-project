@@ -6,6 +6,7 @@ define void @ret_s16(ptr sret([16 x i8]) %result) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    *(u64 *)(r1 + 8) = 2
 ; CHECK-NEXT:    *(u64 *)(r1 + 0) = 1
+; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    exit
   store i64 1, ptr %result
   %p2 = getelementptr i8, ptr %result, i64 8
@@ -19,6 +20,7 @@ define void @ret_s24(ptr sret([24 x i8]) %result) {
 ; CHECK-NEXT:    *(u64 *)(r1 + 16) = 3
 ; CHECK-NEXT:    *(u64 *)(r1 + 8) = 2
 ; CHECK-NEXT:    *(u64 *)(r1 + 0) = 1
+; CHECK-NEXT:    r0 = 0
 ; CHECK-NEXT:    exit
   store i64 1, ptr %result
   %p2 = getelementptr i8, ptr %result, i64 8
