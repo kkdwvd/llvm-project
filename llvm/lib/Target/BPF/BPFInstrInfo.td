@@ -658,10 +658,13 @@ class relaxed_store<PatFrag base>
   let IsAtomicOrderingReleaseOrStronger = 0;
 }
 
+// Also seq_cst: a seq_cst store of 8 or 16 bits is a store-release with a full
+// barrier after it, which AtomicExpand inserts; one of 32 or 64 bits is an
+// exchange by then (BPFTargetLowering::shouldExpandAtomicStoreInIR).
 class releasing_store<PatFrag base>
   : PatFrag<(ops node:$val, node:$ptr), (base node:$val, node:$ptr)> {
   let IsAtomic = 1;
-  let IsAtomicOrderingRelease = 1;
+  let IsAtomicOrderingReleaseOrStronger = 1;
 }
 
 let Predicates = [BPFHasLoadAcqStoreRel] in {
@@ -755,7 +758,7 @@ class relaxed_load<PatFrags base>
   let IsAtomicOrderingAcquireOrStronger = 0;
 }
 
-// seq_cst too: a seq_cst store is xchg.
+// Also seq_cst: a seq_cst load is a load-acquire.
 class acquiring_load<PatFrags base>
     : PatFrag<(ops node:$ptr), (base node:$ptr)> {
   let IsAtomic = 1;
