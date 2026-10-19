@@ -300,6 +300,8 @@ class BTFDebug : public DebugHandlerBase {
   bool LineInfoGenerated;
   uint32_t SecNameOff;
   uint32_t ArrayIndexTypeId;
+  uint32_t ByteTypeId = 0;
+  DenseMap<uint64_t, uint32_t> BytesTypeIds;
   bool MapDefNotCollected;
   BTFStringTable StringTable;
   std::vector<std::unique_ptr<BTFTypeBase>> TypeEntries;
@@ -341,6 +343,7 @@ class BTFDebug : public DebugHandlerBase {
   void visitStructType(const DICompositeType *STy, bool IsStruct,
                        uint32_t &TypeId);
   void visitArrayType(const DICompositeType *ATy, uint32_t &TypeId);
+  void addArrayIndexType();
   void visitEnumType(const DICompositeType *ETy, uint32_t &TypeId);
   void visitDerivedType(const DIDerivedType *DTy, uint32_t &TypeId,
                         bool CheckPointer, bool SeenPointer);
@@ -416,6 +419,10 @@ public:
 
   ///
   bool InstLower(const MachineInstr *MI, MCInst &OutMI);
+
+  /// Get the type id of an array of \p Size bytes, with no element for an
+  /// array of unknown size.
+  uint32_t getBytesTypeId(uint64_t Size);
 
   /// Get the special array index type id.
   uint32_t getArrayIndexTypeId() {

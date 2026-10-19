@@ -16,15 +16,18 @@ define dso_local i32 @foo() local_unnamed_addr !dbg !7 {
   ret i32 %2, !dbg !15
 }
 
+; a has no debug info here, as clang 8 gave an extern variable none. It is
+; described as bytes of an unknown number, as an extern that a frontend made on
+; its own, such as a C++ type_info object, is.
 ; CHECK:             .section        .BTF,"",@progbits
 ; CHECK-NEXT:        .short  60319                   # 0xeb9f
 ; CHECK-NEXT:        .byte   1
 ; CHECK-NEXT:        .byte   0
 ; CHECK-NEXT:        .long   24
 ; CHECK-NEXT:        .long   0
-; CHECK-NEXT:        .long   40
-; CHECK-NEXT:        .long   40
-; CHECK-NEXT:        .long   52
+; CHECK-NEXT:        .long   112
+; CHECK-NEXT:        .long   112
+; CHECK-NEXT:        .long   88
 ; CHECK-NEXT:        .long   0                       # BTF_KIND_FUNC_PROTO(id = 1)
 ; CHECK-NEXT:        .long   218103808               # 0xd000000
 ; CHECK-NEXT:        .long   2
@@ -35,6 +38,24 @@ define dso_local i32 @foo() local_unnamed_addr !dbg !7 {
 ; CHECK-NEXT:        .long   5                       # BTF_KIND_FUNC(id = 3)
 ; CHECK-NEXT:        .long   201326593               # 0xc000001
 ; CHECK-NEXT:        .long   1
+; CHECK-NEXT:        .long   52                      # BTF_KIND_INT(id = 4)
+; CHECK-NEXT:        .long   16777216                # 0x1000000
+; CHECK-NEXT:        .long   1
+; CHECK-NEXT:        .long   8                       # 0x8
+; CHECK-NEXT:        .long   66                      # BTF_KIND_INT(id = 5)
+; CHECK-NEXT:        .long   16777216                # 0x1000000
+; CHECK-NEXT:        .long   4
+; CHECK-NEXT:        .long   32                      # 0x20
+; CHECK-NEXT:        .long   0                       # BTF_KIND_ARRAY(id = 6)
+; CHECK-NEXT:        .long   50331648                # 0x3000000
+; CHECK-NEXT:        .long   0
+; CHECK-NEXT:        .long   4
+; CHECK-NEXT:        .long   5
+; CHECK-NEXT:        .long   0
+; CHECK-NEXT:        .long   86                      # BTF_KIND_VAR(id = 7)
+; CHECK-NEXT:        .long   234881024               # 0xe000000
+; CHECK-NEXT:        .long   6
+; CHECK-NEXT:        .long   2
 ; CHECK-NEXT:        .byte   0                       # string offset=0
 ; CHECK-NEXT:        .ascii  "int"                   # string offset=1
 ; CHECK-NEXT:        .byte   0
@@ -43,6 +64,12 @@ define dso_local i32 @foo() local_unnamed_addr !dbg !7 {
 ; CHECK-NEXT:        .ascii  ".text"                 # string offset=9
 ; CHECK-NEXT:        .byte   0
 ; CHECK-NEXT:        .ascii  "/home/yhs/work/tests/llvm/bug/test.c" # string offset=15
+; CHECK-NEXT:        .byte   0
+; CHECK-NEXT:        .ascii  "unsigned char"         # string offset=52
+; CHECK-NEXT:        .byte   0
+; CHECK-NEXT:        .ascii  "__ARRAY_SIZE_TYPE__"   # string offset=66
+; CHECK-NEXT:        .byte   0
+; CHECK-NEXT:        .byte   97                      # string offset=86
 ; CHECK-NEXT:        .byte   0
 
 !llvm.dbg.cu = !{!0}
