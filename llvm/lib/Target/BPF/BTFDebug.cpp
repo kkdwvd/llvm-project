@@ -1919,7 +1919,8 @@ void BTFDebug::processGlobals(bool ProcessingMapDef) {
 
     // Only support the following globals:
     //  . static variables
-    //  . non-static weak or non-weak global variables
+    //  . non-static weak or non-weak global variables, C++ inline variables
+    //    included, which are linkonce and weak in the symbol table
     //  . weak or non-weak extern global variables
     // Whether DataSec is readonly or not can be found from corresponding ELF
     // section flags. Whether a BTF_KIND_VAR is a weak symbol or not
@@ -1929,6 +1930,8 @@ void BTFDebug::processGlobals(bool ProcessingMapDef) {
         Linkage != GlobalValue::ExternalLinkage &&
         Linkage != GlobalValue::WeakAnyLinkage &&
         Linkage != GlobalValue::WeakODRLinkage &&
+        Linkage != GlobalValue::LinkOnceAnyLinkage &&
+        Linkage != GlobalValue::LinkOnceODRLinkage &&
         Linkage != GlobalValue::ExternalWeakLinkage)
       continue;
 
