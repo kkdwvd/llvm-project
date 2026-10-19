@@ -5981,6 +5981,24 @@ static void setWindowsItaniumDLLImport(CodeGenModule &CGM, bool Local,
   }
 }
 
+/// A target that links calls across objects through debug info, as BPF links
+/// them through BTF, needs it for the runtime functions that CodeGen calls on
+/// its own too. Nothing in the source refers to those, so they get none as
+/// called external functions do (EmitExternalDeclaration). Take it from the
+/// declaration the translation unit has of the function, the one the runtime
+/// is built with, if there is one.
+static void describeRuntimeFunction(CodeGenModule &CGM, llvm::Function *F,
+                                    StringRef Name) {
+  CGDebugInfo *DI = CGM.getModuleDebugInfo();
+  if (!DI || !CGM.getCodeGenOpts().hasReducedDebugInfo() ||
+      !CGM.getTarget().allowDebugInfoForExternalRef() || F->getSubprogram())
+    return;
+  const FunctionDecl *FD = GetRuntimeFunctionDecl(CGM.getContext(), Name);
+  if (!FD || FD->hasAttr<NoDebugAttr>())
+    return;
+  DI->EmitFunctionDecl(GlobalDecl(FD), FD->getLocation(), FD->getType(), F);
+}
+
 llvm::FunctionCallee CodeGenModule::CreateRuntimeFunction(
     QualType ReturnTy, ArrayRef<QualType> ArgTys, StringRef Name,
     llvm::AttributeList ExtraAttrs, bool Local, bool AssumeConvergent) {
@@ -6005,6 +6023,7 @@ llvm::FunctionCallee CodeGenModule::CreateRuntimeFunction(
       F->setCallingConv(getRuntimeCC());
       setWindowsItaniumDLLImport(*this, Local, F, Name);
       setDSOLocal(F);
+      describeRuntimeFunction(*this, F, Name);
     }
   }
   return {ConvTy, C};
@@ -6036,6 +6055,7 @@ CodeGenModule::CreateRuntimeFunction(llvm::FunctionType *FTy, StringRef Name,
       // signature.  The other overload of CreateRuntimeFunction does this; it
       // should be used for new code.
       markRegisterParameterAttributes(F);
+      describeRuntimeFunction(*this, F, Name);
     }
   }
 
