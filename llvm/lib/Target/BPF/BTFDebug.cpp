@@ -643,7 +643,7 @@ void BTFTypeFuncProto::completeType(BTFDebug &BDebug) {
   IsCompleted = true;
 
   DITypeArray Elements = STy->getTypeArray();
-  if (VoidReturn) {
+  if (VoidReturn || Elements.empty()) {
     BTFType.Type = 0;
   } else {
     auto RetType = tryRemoveAtomicType(Elements[0]);
@@ -874,10 +874,16 @@ void BTFDebug::visitSubroutineType(
     const DISubroutineType *STy, bool ForSubprog,
     const SmallDenseMap<uint32_t, StringRef> &FuncArgNames, uint32_t &TypeId,
     bool VoidReturn) {
+  // The first element is the return type, null for void, and the rest are
+  // the parameters. A type without elements says neither, as clang's type for
+  // a function without a declaration of its own: describe it as returning
+  // void and taking nothing.
   DITypeArray Elements = STy->getTypeArray();
-  uint32_t VLen = Elements.size() - 1;
-  if (VLen > BTF::MAX_VLEN)
+  uint32_t VLen = Elements.empty() ? 0 : Elements.size() - 1;
+  if (VLen > BTF::MAX_VLEN) {
+    TypeId = 0;
     return;
+  }
 
   // Subprogram has a valid non-zero-length name, and the pointee of
   // a function pointer has an empty name. The subprogram type will
