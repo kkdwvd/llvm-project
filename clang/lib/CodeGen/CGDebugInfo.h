@@ -708,6 +708,13 @@ public:
   /// Emit symbol for debugger that holds the pointer to the vtable.
   void emitVTableSymbol(llvm::GlobalVariable *VTable, const CXXRecordDecl *RD);
 
+  /// Describe a thunk, which emitFunctionStart() gave no type: by the type
+  /// of the vtable slot it fills, the return type and parameters of the
+  /// function it adjusts \p this for, with \p this of type \p ThisType, the
+  /// class of that slot, when known.
+  void completeThunk(llvm::Function *Fn, QualType ResultType,
+                     ArrayRef<const VarDecl *> Args, QualType ThisType);
+
   /// Return flags which enable debug info emission for call sites, provided
   /// that it is supported and enabled.
   llvm::DINode::DIFlags getCallSiteRelatedAttrs() const;

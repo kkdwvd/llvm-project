@@ -5181,6 +5181,49 @@ void CGDebugInfo::emitFunctionStart(GlobalDecl GD, SourceLocation Loc,
     RegionMap[D].reset(SP);
 }
 
+void CGDebugInfo::completeThunk(llvm::Function *Fn, QualType ResultType,
+                                ArrayRef<const VarDecl *> Args,
+                                QualType ThisType) {
+  llvm::DISubprogram *SP = Fn->getSubprogram();
+  if (!SP || DebugKind <= llvm::codegenoptions::DebugLineTablesOnly)
+    return;
+
+  // A thunk takes a pointer to the class of the vtable slot it fills, and
+  // what the function it adjusts this for takes and returns otherwise.
+  llvm::DIFile *Unit = SP->getFile();
+  SmallVector<llvm::Metadata *, 8> Types;
+  Types.push_back(getOrCreateType(ResultType, Unit));
+  for (const VarDecl *VD : Args) {
+    const auto *IPD = dyn_cast<ImplicitParamDecl>(VD);
+    bool IsThis = IPD && IPD->getParameterKind() == ImplicitParamKind::CXXThis;
+    Types.push_back(getOrCreateType(
+        IsThis && !ThisType.isNull() ? ThisType : VD->getType(), Unit));
+  }
+  SP->replaceType(
+      DBuilder.createSubroutineType(DBuilder.getOrCreateTypeArray(Types)));
+
+  // BTF names the parameters of a function after its parameter variables, and
+  // the kernel refuses a global function with a parameter it does not name.
+  // A thunk has no parameter variables, as they would describe this before
+  // its adjustment (see EmitParmDecl). On BPF, give a thunk variables without
+  // a location: a name and a type for each parameter, which is what BTF takes
+  // from them.
+  if (!CGM.getTarget().getTriple().isBPF())
+    return;
+  for (auto [I, VD] : llvm::enumerate(Args)) {
+    llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+    if (const auto *IPD = dyn_cast<ImplicitParamDecl>(VD)) {
+      Flags |= llvm::DINode::FlagArtificial;
+      if (IPD->getParameterKind() == ImplicitParamKind::CXXThis)
+        Flags |= llvm::DINode::FlagObjectPointer;
+    }
+    DBuilder.createParameterVariable(SP, VD->getName(), I + 1, Unit,
+                                     SP->getLine(),
+                                     cast_or_null<llvm::DIType>(Types[I + 1]),
+                                     /*AlwaysPreserve=*/true, Flags);
+  }
+}
+
 void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
                                    QualType FnType, llvm::Function *Fn) {
   StringRef Name;
