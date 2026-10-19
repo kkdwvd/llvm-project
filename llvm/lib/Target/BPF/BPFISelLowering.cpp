@@ -185,9 +185,10 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
 
   setBooleanContents(ZeroOrOneBooleanContent);
   setMaxAtomicSizeInBitsSupported(64);
-  // AtomicExpand turns operations on 8 and 16 bits into cmpxchg of the word
-  // that they are in. Its loops start with a relaxed atomic load.
-  if (STI.hasLoadAcqStoreRel())
+  // BPF has no atomic read-modify-write of 8 or 16 bits. AtomicExpand works
+  // those on the 32-bit word around them (shouldExpandAtomicRMWInIR), with
+  // the 32-bit cmpxchg of ALU32.
+  if (STI.getHasAlu32())
     setMinCmpXchgSizeInBits(32);
   setMinimumJumpTableEntries(BPFMinimumJumpTableEntries);
 
@@ -952,7 +953,9 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 //   store release    store-release
 //   store seq_cst    xchg (32 and 64 bits)
 //                    store-release, full barrier (8 and 16 bits)
-//   rmw (any order)  the fetching atomic, fully ordered
+//   rmw (any order)  the fetching atomic, fully ordered; one of 8 or 16 bits
+//                    or one BPF has no instruction for (max, nand, ...) is
+//                    expanded by AtomicExpand (shouldExpandAtomicRMWInIR)
 //   cmpxchg          cmpxchg, fully ordered when it succeeds; a failed one is
 //                    unordered in the kernel's memory model, like a failed
 //                    cmpxchg() (arm64's exclusive loop branches past its dmb)
@@ -1066,11 +1069,19 @@ SDValue BPFTargetLowering::LowerATOMIC_LOAD_STORE(SDValue Op,
   return Op;
 }
 
+// The verifier refuses the cmpxchg loops this makes: the state at the head of
+// such a loop is the same on every trip, with no bound, so it reports an
+// infinite loop. Until the loop gets a may_goto bound with a defined way to
+// fail, or BPF gets atomics of 8 and 16 bits and atomic max and min, only the
+// widened and, or and xor, and a weak cmpxchg, load.
 TargetLowering::AtomicExpansionKind
 BPFTargetLowering::shouldExpandAtomicRMWInIR(const AtomicRMWInst *AI) const {
-  if (!HasLoadAcqStoreRel)
+  // A cmpxchg loop needs the 32-bit cmpxchg of ALU32 for the narrow ones.
+  if (!HasAlu32)
     return TargetLowering::shouldExpandAtomicRMWInIR(AI);
 
+  // AtomicExpand widens an 8- or 16-bit and, or and xor to one atomic on the
+  // 32-bit word around it, and makes a cmpxchg loop on that word of the rest.
   switch (AI->getOperation()) {
   case AtomicRMWInst::Add:
   case AtomicRMWInst::Sub:
@@ -1083,6 +1094,7 @@ BPFTargetLowering::shouldExpandAtomicRMWInIR(const AtomicRMWInst *AI) const {
       return AtomicExpansionKind::None;
     [[fallthrough]];
   default:
+    // nand, min, max and the other operations BPF has no instruction for.
     return AtomicExpansionKind::CmpXChg;
   }
 }

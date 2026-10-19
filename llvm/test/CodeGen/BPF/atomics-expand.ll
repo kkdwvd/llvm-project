@@ -1,16 +1,20 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 < %s | FileCheck %s
-; RUN: not --crash llc -mtriple=bpfel -mcpu=v3 < %s 2>&1 | FileCheck --check-prefix=V3 %s
+; RUN: llc -mtriple=bpfel -mcpu=v3 < %s | FileCheck --check-prefix=V3 %s
 ;
 ; Atomic operations that BPF has no insn for.
 ;
 ; The loops start with a relaxed atomic load and a seq_cst load is load acquire.
-; v3 has neither.
-; V3: unsupported atomic operation, please use 32/64 bit version
+; v3 has no load acquire: a relaxed load is a plain load there, and a seq_cst
+; one a plain load and a full barrier (atomic-load-store-fallback.ll). The
+; 32-bit cmpxchg of the loops comes with ALU32.
 
 ; 8 and 16 bits: cmpxchg of the word that they are in.
 define i8 @swap8(ptr %p, i8 %v) {
 ; CHECK-LABEL: swap8:
 ; CHECK:       w0 = cmpxchg32_32(r{{[0-9]}} + 0, w0, w{{[0-9]}})
+; V3-LABEL:    swap8:
+; V3:          w{{[0-9]}} = *(u32 *)(r{{[0-9]}} + 0)
+; V3:          w0 = cmpxchg32_32(r{{[0-9]}} + 0, w0, w{{[0-9]}})
   %r = atomicrmw xchg ptr %p, i8 %v seq_cst
   ret i8 %r
 }
@@ -65,6 +69,9 @@ define void @store64(ptr %p, i64 %v) {
 define i64 @load64(ptr %p) {
 ; CHECK-LABEL: load64:
 ; CHECK:       r0 = load_acquire((u64 *)(r1 + 0))
+; V3-LABEL:    load64:
+; V3:          r0 = *(u64 *)(r1 + 0)
+; V3:          r{{[0-9]}} = atomic_fetch_add((u64 *)(r10 - 8), r{{[0-9]}})
   %r = load atomic i64, ptr %p seq_cst, align 8
   ret i64 %r
 }
