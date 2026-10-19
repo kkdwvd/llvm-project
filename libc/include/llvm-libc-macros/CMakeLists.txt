@@ -10,30 +10,31 @@ function(add_macro_header name)
   if(MACRO_HEADER_DEST_HDR)
     set(dest_header_arg DEST_HDR ${MACRO_HEADER_DEST_HDR})
   endif()
+  # A header the target OS refines, or the target architecture where the
+  # architecture is the platform, as BPF is, depends on the refinement.
+  set(platform_deps)
   if(TARGET libc.include.llvm-libc-macros.${LIBC_TARGET_OS}.${name})
-    add_header(
-      ${name}
-      HDR
-        ${MACRO_HEADER_HDR}
-      ${dest_header_arg}
-      DEPENDS
-        .${LIBC_TARGET_OS}.${name}
-        ${MACRO_HEADER_DEPENDS}
-    )
-  else()
-    add_header(
-      ${name}
-      HDR
-        ${MACRO_HEADER_HDR}
-      ${dest_header_arg}
-      DEPENDS
-        ${MACRO_HEADER_DEPENDS}
-    )
+    list(APPEND platform_deps .${LIBC_TARGET_OS}.${name})
   endif()
+  if(TARGET libc.include.llvm-libc-macros.${LIBC_TARGET_ARCHITECTURE}.${name})
+    list(APPEND platform_deps .${LIBC_TARGET_ARCHITECTURE}.${name})
+  endif()
+  add_header(
+    ${name}
+    HDR
+      ${MACRO_HEADER_HDR}
+    ${dest_header_arg}
+    DEPENDS
+      ${platform_deps}
+      ${MACRO_HEADER_DEPENDS}
+  )
 endfunction()
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
+endif()
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_ARCHITECTURE})
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_ARCHITECTURE})
 endif()
 
 add_macro_header(
