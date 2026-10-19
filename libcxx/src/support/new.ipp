@@ -33,6 +33,15 @@ static void* operator_new_impl(std::size_t size) {
   if (size == 0)
     size = 1;
   void* p;
+#if defined(__BPF__)
+  // The new handler is not called: a call through the stored pointer here
+  // would be a call through a number in every function that allocates, and the
+  // kernel refuses a function whose address a program stores, as every virtual
+  // function is, when it can make such a call itself. An allocation that fails
+  // fails at once. TODO(kkd): kernel limitation; with verified calls through
+  // a pointer the loop below applies.
+  p = std::malloc(size);
+#else
   while ((p = std::malloc(size)) == nullptr) {
     // If malloc fails and there is a new_handler,
     // call it to try free up memory.
@@ -42,6 +51,7 @@ static void* operator_new_impl(std::size_t size) {
     else
       break;
   }
+#endif
   if (failure_mode == on_failure::throw_bad_alloc && !p)
     __throw_bad_alloc_shim();
   return p;
@@ -126,6 +136,10 @@ static void* operator_new_aligned_impl(std::size_t size, std::align_val_t alignm
   // call it to try free up memory, and try again until it succeeds, or until
   // the new_handler decides to terminate.
   void* p;
+#if defined(__BPF__)
+  // Not through the new handler: see operator_new_impl.
+  p = std::__libcpp_aligned_alloc(static_cast<std::size_t>(alignment), size);
+#else
   while ((p = std::__libcpp_aligned_alloc(static_cast<std::size_t>(alignment), size)) == nullptr) {
     std::new_handler nh = std::get_new_handler();
     if (nh)
@@ -133,6 +147,7 @@ static void* operator_new_aligned_impl(std::size_t size, std::align_val_t alignm
     else
       break;
   }
+#endif
   if (failure_mode == on_failure::throw_bad_alloc && !p)
     __throw_bad_alloc_shim();
   return p;
