@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/IR/DebugProgramInstruction.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCObjectFileInfo.h"
@@ -1685,16 +1686,24 @@ void BTFDebug::beginFunctionImpl(const MachineFunction *MF) {
   // Use RetainedNodes so we can collect all argument names
   // even if the argument is not used.
   SmallDenseMap<uint32_t, StringRef> FuncArgNames;
-  for (const MDNode *DN : SP->getRetainedNodes()) {
-    if (const auto *DV = dyn_cast<DILocalVariable>(DN)) {
-      // Collect function arguments for subprogram func type.
-      uint32_t Arg = DV->getArg();
-      if (Arg) {
-        visitTypeEntry(DV->getType());
-        FuncArgNames[Arg] = DV->getName();
-      }
+  auto CollectArg = [&](const DILocalVariable *DV) {
+    // Collect function arguments for subprogram func type.
+    uint32_t Arg = DV->getArg();
+    if (Arg && DV->getScope() == SP && !FuncArgNames.contains(Arg)) {
+      visitTypeEntry(DV->getType());
+      FuncArgNames[Arg] = DV->getName();
     }
-  }
+  };
+  for (const MDNode *DN : SP->getRetainedNodes())
+    if (const auto *DV = dyn_cast<DILocalVariable>(DN))
+      CollectArg(DV);
+  // Without optimization, clang retains no argument variables: the function's
+  // debug records are what refers to them then.
+  for (const BasicBlock &BB : MF->getFunction())
+    for (const Instruction &I : BB)
+      for (const DbgVariableRecord &DVR : filterDbgVars(I.getDbgRecordRange()))
+        if (!DVR.getDebugLoc()->getInlinedAt())
+          CollectArg(DVR.getVariable());
 
   // Construct subprogram func proto type.
   uint32_t ProtoTypeId, FuncTypeId;
