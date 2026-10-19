@@ -85,6 +85,8 @@ public:
 
   bool allowDebugInfoForExternalRef() const override { return true; }
 
+  bool hasBitIntType() const override { return true; }
+
   CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
     switch (CC) {
     default:
