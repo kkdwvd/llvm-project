@@ -134,9 +134,9 @@ shouldUseExceptionTablesForObjCExceptions(const ObjCRuntime &runtime,
 /// main flag, -fexceptions and also language specific flags to enable/disable
 /// C++ and Objective-C exceptions. This makes it possible to for example
 /// disable C++ exceptions but enable Objective-C exceptions.
-/// Whether addExceptionArgs() passes -fexceptions on, for a target that has
-/// C++ exceptions off by default, like BPF: asked for outright, or through
-/// C++ exceptions.
+/// Whether addExceptionArgs() passes -fexceptions on for BPF, which has C++
+/// exceptions on by default as hosted targets do: asked for outright, or C++
+/// with them not turned off.
 static bool wantsExceptions(const ArgList &Args, types::ID InputType) {
   if (Args.hasFlag(options::OPT_fexceptions, options::OPT_fno_exceptions,
                    false))
@@ -146,9 +146,9 @@ static bool wantsExceptions(const ArgList &Args, types::ID InputType) {
   Arg *ExceptionArg = Args.getLastArg(
       options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
       options::OPT_fexceptions, options::OPT_fno_exceptions);
-  return ExceptionArg &&
-         (ExceptionArg->getOption().matches(options::OPT_fcxx_exceptions) ||
-          ExceptionArg->getOption().matches(options::OPT_fexceptions));
+  return !ExceptionArg ||
+         ExceptionArg->getOption().matches(options::OPT_fcxx_exceptions) ||
+         ExceptionArg->getOption().matches(options::OPT_fexceptions);
 }
 
 static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
@@ -197,10 +197,9 @@ static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
   }
 
   if (types::isCXX(InputType)) {
-    // Disable C++ EH by default on XCore, PS4/PS5, BPF, and GPU targets.
+    // Disable C++ EH by default on XCore, PS4/PS5 and GPU targets.
     bool CXXExceptionsEnabled = Triple.getArch() != llvm::Triple::xcore &&
                                 !Triple.isPS() && !Triple.isDriverKit() &&
-                                !Triple.isBPF() &&
                                 !(Triple.isGPU() && !IsDeviceOffloadAction);
     Arg *ExceptionArg = Args.getLastArg(
         options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
