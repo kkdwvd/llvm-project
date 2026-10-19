@@ -167,6 +167,7 @@ void BPF::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   SmallString<128> SharedDir(SysRoot);
   llvm::sys::path::append(SharedDir, "include");
 
+  std::string CXXABIHeader;
   for (StringRef Dir : {StringRef(TargetDir), StringRef(SharedDir)}) {
     std::string Version = detectLibcxxVersion(Dir);
     if (Version.empty())
@@ -174,6 +175,25 @@ void BPF::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
     SmallString<128> P(Dir);
     llvm::sys::path::append(P, "c++", Version);
     addSystemInclude(DriverArgs, CC1Args, P);
+    if (CXXABIHeader.empty()) {
+      llvm::sys::path::append(P, "cxxabi.h");
+      if (getVFS().exists(P))
+        CXXABIHeader = std::string(P);
+    }
+  }
+
+  // libbpf links a call of a function in another object through BTF, which
+  // clang derives from the declaration the unit has of the function; the
+  // calls it makes on its own for a throw, a catch, a dynamic_cast or a
+  // vtable's pure virtual slot have one only if the unit declares the runtime
+  // function, and a unit that throws need not include a header. The C++
+  // ABI's own header, which libc++abi installs with libc++'s headers,
+  // declares them with the types the runtime is built with, so every unit
+  // includes it, as the CUDA, HIP and OpenMP toolchains include their
+  // runtimes' declarations.
+  if (!CXXABIHeader.empty()) {
+    CC1Args.push_back("-include");
+    CC1Args.push_back(DriverArgs.MakeArgString(CXXABIHeader));
   }
 }
 

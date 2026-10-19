@@ -37,7 +37,7 @@ The layout, with `<triple>` one of the two above:
 ```
 <sysroot>/include/<triple>/            the target's C headers
 <sysroot>/include/<triple>/c++/v1/     libc++'s headers, or its __config_site
-                                       alone
+                                       alone, and the C++ ABI's cxxabi.h
 <sysroot>/include/c++/v1/              libc++'s headers, if shared between
                                        the targets
 <sysroot>/include/                     C headers shared between the targets
@@ -57,6 +57,19 @@ and `-nostdinc` leave out what they do on every target.
 Without a sysroot the driver adds no directory, and the frontend adds the
 host's as it does for any target without an OS, under `--sysroot` if there is
 one; there are no C++ headers.
+
+### cxxabi.h in every C++ unit
+
+libbpf links a call of a function in another object through BTF, which clang
+derives from the declaration the unit has of the function. The calls clang
+makes on its own, for a throw, a catch, a `dynamic_cast` or a vtable's pure
+virtual slot, have BTF only if the unit declares the runtime function, and a
+unit that throws need not include any header. With a sysroot that has it, the
+driver includes `include/<triple>/c++/v1/cxxabi.h`, the C++ ABI's header that
+libc++abi installs with libc++'s headers, in every C++ unit, as the CUDA, HIP
+and OpenMP toolchains include their runtimes' declarations. Its declarations
+must have the types, and the `noexcept`, that the runtime is built with:
+libbpf compares the BTF of the call with the BTF of the definition.
 
 ## Defaults for C and C++
 
@@ -141,8 +154,10 @@ looks (`-print-libgcc-file-name` prints the path). The target's C headers,
 the kernel's UAPI headers among them if the sysroot is to replace the host's
 `<linux/*.h>`, go to `include/<triple>`.
 
-One thing the runtimes must get right for libbpf, which links by BTF and
+Two things the runtimes must get right for libbpf, which links by BTF and
 visibility rather than by symbol name alone: libc++'s `__config_site` should
 define `_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS` (`LIBCXX_EXTRA_SITE_DEFINES`),
 since a declaration with default visibility in a program does not link against
-the hidden definition in the library.
+the hidden definition in the library, and `cxxabi.h` must be in
+`include/<triple>/c++/v1` with the declarations the runtime is built with, as
+above.
