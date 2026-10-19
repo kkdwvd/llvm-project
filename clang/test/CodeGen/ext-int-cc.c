@@ -29,6 +29,7 @@
 // RUN: %clang_cc1 -no-enable-noundef-analysis -triple arm -O3 -disable-llvm-passes -emit-llvm -o - %s | FileCheck %s --check-prefixes=ARM
 // RUN: %clang_cc1 -no-enable-noundef-analysis -triple loongarch64 -O3 -disable-llvm-passes -fexperimental-max-bitint-width=1024 -emit-llvm -o - %s | FileCheck %s --check-prefixes=LA64
 // RUN: %clang_cc1 -no-enable-noundef-analysis -triple loongarch32 -O3 -disable-llvm-passes -fexperimental-max-bitint-width=1024 -emit-llvm -o - %s | FileCheck %s --check-prefixes=LA32
+// RUN: %clang_cc1 -no-enable-noundef-analysis -triple bpf -O3 -disable-llvm-passes -fexperimental-max-bitint-width=1024 -emit-llvm -o - %s | FileCheck %s --check-prefixes=BPF
 
 // Make sure 128 and 64 bit versions are passed like integers.
 void ParamPassing(_BitInt(128) b, _BitInt(64) c) {}
@@ -60,6 +61,7 @@ void ParamPassing(_BitInt(128) b, _BitInt(64) c) {}
 // ARM: define{{.*}} arm_aapcscc void @ParamPassing(ptr byval(i128) align 8 %{{.+}}, i64 %{{.+}})
 // LA64: define{{.*}} void @ParamPassing(i128 %{{.+}}, i64 %{{.+}})
 // LA32: define{{.*}} void @ParamPassing(ptr nofreeobj align 16 dead_on_return dereferenceable(16) %{{.+}}, i64 %{{.+}})
+// BPF: define{{.*}} void @ParamPassing(i128 %{{.+}}, i64 %{{.+}})
 
 void ParamPassing2(_BitInt(127) b, _BitInt(63) c) {}
 // LIN64: define{{.*}} void @ParamPassing2(i64 %{{.+}}, i64 %{{.+}}, i64 %{{.+}})
@@ -90,6 +92,7 @@ void ParamPassing2(_BitInt(127) b, _BitInt(63) c) {}
 // ARM: define{{.*}} arm_aapcscc void @ParamPassing2(ptr byval(i128) align 8 %{{.+}}, i63 %{{.+}})
 // LA64: define{{.*}} void @ParamPassing2(i127 %{{.+}}, i63 signext %{{.+}})
 // LA32: define{{.*}} void @ParamPassing2(ptr nofreeobj align 16 dead_on_return dereferenceable(16) %{{.+}}, i63 %{{.+}})
+// BPF: define{{.*}} void @ParamPassing2(i127 %{{.+}}, i63 %{{.+}})
 
 // Make sure we follow the signext rules for promotable integer types.
 void ParamPassing3(_BitInt(15) a, _BitInt(31) b) {}
@@ -121,6 +124,7 @@ void ParamPassing3(_BitInt(15) a, _BitInt(31) b) {}
 // ARM: define{{.*}} arm_aapcscc void @ParamPassing3(i15 signext %{{.+}}, i31 signext %{{.+}})
 // LA64: define{{.*}} void @ParamPassing3(i15 signext %{{.+}}, i31 signext %{{.+}})
 // LA32: define{{.*}} void @ParamPassing3(i15 signext %{{.+}}, i31 signext %{{.+}})
+// BPF: define{{.*}} void @ParamPassing3(i15 signext %{{.+}}, i31 signext %{{.+}})
 
 #if __BITINT_MAXWIDTH__ > 128
 // When supported, bit-precise types that are >128 are passed indirectly. Note,
@@ -156,6 +160,7 @@ void ParamPassing4(_BitInt(129) a) {}
 // ARM-NOT: define{{.*}} arm_aapcscc void @ParamPassing4(ptr byval(i129) align 8 %{{.+}})
 // LA64: define{{.*}} void @ParamPassing4(ptr nofreeobj align 16 dead_on_return dereferenceable(32) %{{.+}})
 // LA32: define{{.*}} void @ParamPassing4(ptr nofreeobj align 16 dead_on_return dereferenceable(32) %{{.+}})
+// BPF: define{{.*}} void @ParamPassing4(ptr byval([24 x i8]) align 8 %{{.+}})
 #endif
 
 _BitInt(63) ReturnPassing(void) { return 0; }
@@ -187,6 +192,7 @@ _BitInt(63) ReturnPassing(void) { return 0; }
 // ARM: define{{.*}} arm_aapcscc i63 @ReturnPassing(
 // LA64: define{{.*}} signext i63 @ReturnPassing(
 // LA32: define{{.*}} i63 @ReturnPassing(
+// BPF: define{{.*}} i63 @ReturnPassing(
 
 _BitInt(64) ReturnPassing2(void) { return 0; }
 // LIN64: define{{.*}} i64 @ReturnPassing2(
@@ -217,6 +223,7 @@ _BitInt(64) ReturnPassing2(void) { return 0; }
 // ARM: define{{.*}} arm_aapcscc i64 @ReturnPassing2(
 // LA64: define{{.*}} i64 @ReturnPassing2(
 // LA32: define{{.*}} i64 @ReturnPassing2(
+// BPF: define{{.*}} i64 @ReturnPassing2(
 
 _BitInt(127) ReturnPassing3(void) { return 0; }
 // LIN64: define{{.*}} { i64, i64 } @ReturnPassing3(
@@ -249,6 +256,7 @@ _BitInt(127) ReturnPassing3(void) { return 0; }
 // ARM: define{{.*}} arm_aapcscc void @ReturnPassing3(ptr dead_on_unwind noalias writable sret
 // LA64: define{{.*}} i127 @ReturnPassing3(
 // LA32: define{{.*}} void @ReturnPassing3(ptr dead_on_unwind noalias writable sret
+// BPF: define{{.*}} i127 @ReturnPassing3(
 
 _BitInt(128) ReturnPassing4(void) { return 0; }
 // LIN64: define{{.*}} i128 @ReturnPassing4(
@@ -279,6 +287,7 @@ _BitInt(128) ReturnPassing4(void) { return 0; }
 // ARM: define{{.*}} arm_aapcscc void @ReturnPassing4(ptr dead_on_unwind noalias writable sret
 // LA64: define{{.*}} i128 @ReturnPassing4(
 // LA32: define{{.*}} void @ReturnPassing4(ptr dead_on_unwind noalias writable sret
+// BPF: define{{.*}} i128 @ReturnPassing4(
 
 #if __BITINT_MAXWIDTH__ > 128
 _BitInt(129) ReturnPassing5(void) { return 0; }
@@ -308,6 +317,7 @@ _BitInt(129) ReturnPassing5(void) { return 0; }
 // ARM-NOT: define{{.*}} arm_aapcscc void @ReturnPassing5(ptr dead_on_unwind noalias writable sret
 // LA64: define{{.*}} void @ReturnPassing5(ptr dead_on_unwind noalias writable sret
 // LA32: define{{.*}} void @ReturnPassing5(ptr dead_on_unwind noalias writable sret
+// BPF: define{{.*}} void @ReturnPassing5(ptr dead_on_unwind noalias writable sret([24 x i8]) align 8
 
 // SparcV9 is odd in that it has a return-size limit of 256, not 128 or 64
 // like other platforms, so test to make sure this behavior will still work.
