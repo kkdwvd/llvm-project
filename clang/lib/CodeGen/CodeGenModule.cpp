@@ -6404,6 +6404,13 @@ void CodeGenModule::EmitExternalDeclaration(const DeclaratorDecl *D) {
   if (!DI || !getCodeGenOpts().hasReducedDebugInfo())
     return;
 
+  // A function that the translation unit defines is no external reference,
+  // whatever declared it first: its definition has debug info. Its address
+  // can be an alias, such as a destructor's that is the destructor of its
+  // base class.
+  if (const auto *FD = dyn_cast<FunctionDecl>(D); FD && FD->hasBody())
+    return;
+
   GlobalDecl GD = getBaseVariantGlobalDecl(D);
   if (!GD)
     return;
