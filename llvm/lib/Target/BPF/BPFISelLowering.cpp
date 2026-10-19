@@ -181,6 +181,11 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
 
   setBooleanContents(ZeroOrOneBooleanContent);
   setMaxAtomicSizeInBitsSupported(64);
+  // BPF has no atomic read-modify-write of 8 or 16 bits. AtomicExpand works
+  // those on the 32-bit word around them (shouldExpandAtomicRMWInIR), with
+  // the 32-bit cmpxchg of ALU32.
+  if (STI.getHasAlu32())
+    setMinCmpXchgSizeInBits(32);
   setMinimumJumpTableEntries(BPFMinimumJumpTableEntries);
 
   // Function alignments
@@ -244,6 +249,38 @@ bool BPFTargetLowering::allowsMisalignedMemoryAccesses(EVT VT, unsigned, Align,
 
 bool BPFTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
   return false;
+}
+
+// The verifier refuses the cmpxchg loops this makes: the state at the head of
+// such a loop is the same on every trip, with no bound, so it reports an
+// infinite loop. Until the loop gets a may_goto bound with a defined way to
+// fail, or BPF gets atomics of 8 and 16 bits and atomic max and min, only the
+// widened and, or and xor, and a weak cmpxchg, load.
+TargetLoweringBase::AtomicExpansionKind
+BPFTargetLowering::shouldExpandAtomicRMWInIR(const AtomicRMWInst *AI) const {
+  AtomicExpansionKind Kind = TargetLowering::shouldExpandAtomicRMWInIR(AI);
+  // A cmpxchg loop needs the 32-bit cmpxchg of ALU32 for the narrow ones.
+  if (Kind != AtomicExpansionKind::None || !HasAlu32)
+    return Kind;
+
+  // AtomicExpand widens an 8- or 16-bit and, or and xor to one atomic on the
+  // 32-bit word around it, and makes a cmpxchg loop on that word of the rest.
+  const DataLayout &DL = AI->getDataLayout();
+  if (DL.getTypeStoreSizeInBits(AI->getValOperand()->getType()) < 32)
+    return AtomicExpansionKind::CmpXChg;
+
+  switch (AI->getOperation()) {
+  case AtomicRMWInst::Xchg:
+  case AtomicRMWInst::Add:
+  case AtomicRMWInst::Sub:
+  case AtomicRMWInst::And:
+  case AtomicRMWInst::Or:
+  case AtomicRMWInst::Xor:
+    return AtomicExpansionKind::None;
+  default:
+    // nand, min, max and the other operations BPF has no instruction for.
+    return AtomicExpansionKind::CmpXChg;
+  }
 }
 
 bool BPFTargetLowering::isTruncateFree(Type *Ty1, Type *Ty2) const {
@@ -979,7 +1016,9 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 //   store release    store-release
 //   store seq_cst    xchg (32 and 64 bits)
 //                    store-release, full barrier (8 and 16 bits)
-//   rmw (any order)  the fetching atomic, fully ordered
+//   rmw (any order)  the fetching atomic, fully ordered; one of 8 or 16 bits
+//                    or one BPF has no instruction for (max, nand, ...) is
+//                    expanded by AtomicExpand (shouldExpandAtomicRMWInIR)
 //   cmpxchg          cmpxchg, fully ordered when it succeeds; a failed one is
 //                    unordered in the kernel's memory model, like a failed
 //                    cmpxchg() (arm64's exclusive loop branches past its dmb)
