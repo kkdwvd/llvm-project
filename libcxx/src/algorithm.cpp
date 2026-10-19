@@ -43,9 +43,11 @@ template void __sort<__less<long>&, long*>(long*, long*, __less<long>&);
 template void __sort<__less<unsigned long>&, unsigned long*>(unsigned long*, unsigned long*, __less<unsigned long>&);
 template void __sort<__less<long long>&, long long*>(long long*, long long*, __less<long long>&);
 template void __sort<__less<unsigned long long>&, unsigned long long*>(unsigned long long*, unsigned long long*, __less<unsigned long long>&);
+#if !defined(__BPF__) // BPF has no floating point
 template void __sort<__less<float>&, float*>(float*, float*, __less<float>&);
 template void __sort<__less<double>&, double*>(double*, double*, __less<double>&);
 template void __sort<__less<long double>&, long double*>(long double*, long double*, __less<long double>&);
+#endif
 // clang-format on
 
 _LIBCPP_END_EXPLICIT_ABI_ANNOTATIONS

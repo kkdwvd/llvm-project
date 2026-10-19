@@ -147,6 +147,22 @@ if (LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS)
     )
 endif()
 
+if (LLVM_DEFAULT_TARGET_TRIPLE MATCHES "^bpf")
+  # BPF has no floating point and no variadic function definitions, and a BPF
+  # program runs no static constructors: what is nothing else is left out.
+  # algorithm.cpp, charconv.cpp and string.cpp leave out their floating-point
+  # parts themselves.
+  list(REMOVE_ITEM LIBCXX_SOURCES
+    filesystem/filesystem_error.cpp # a variadic definition
+    memory_resource.cpp # a static object with a destructor to register
+    ryu/d2fixed.cpp
+    ryu/d2s.cpp
+    ryu/f2s.cpp
+    system_error.cpp # passes a std::string by value, which BPF's convention cannot
+    verbose_abort.cpp # a variadic definition
+    )
+endif()
+
 if (APPLE AND LLVM_USE_SANITIZER)
   if (("${LLVM_USE_SANITIZER}" STREQUAL "Address") OR
       ("${LLVM_USE_SANITIZER}" STREQUAL "Address;Undefined") OR

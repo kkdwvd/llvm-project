@@ -241,11 +241,13 @@ unsigned long long stoull(const string& str, size_t* idx, int base) {
   return as_integer<unsigned long long>("stoull", str, idx, base);
 }
 
+#if !defined(__BPF__) // BPF has no floating point
 float stof(const string& str, size_t* idx) { return as_float<float>("stof", str, idx); }
 
 double stod(const string& str, size_t* idx) { return as_float<double>("stod", str, idx); }
 
 long double stold(const string& str, size_t* idx) { return as_float<long double>("stold", str, idx); }
+#endif
 
 #if _LIBCPP_HAS_WIDE_CHARACTERS
 int stoi(const wstring& str, size_t* idx, int base) { return as_integer<int>("stoi", str, idx, base); }
@@ -262,11 +264,13 @@ unsigned long long stoull(const wstring& str, size_t* idx, int base) {
   return as_integer<unsigned long long>("stoull", str, idx, base);
 }
 
+#  if !defined(__BPF__) // BPF has no floating point
 float stof(const wstring& str, size_t* idx) { return as_float<float>("stof", str, idx); }
 
 double stod(const wstring& str, size_t* idx) { return as_float<double>("stod", str, idx); }
 
 long double stold(const wstring& str, size_t* idx) { return as_float<long double>("stold", str, idx); }
+#  endif
 #endif // _LIBCPP_HAS_WIDE_CHARACTERS
 
 // to_string
@@ -358,15 +362,17 @@ wstring to_wstring(unsigned long val) { return i_to_string<wstring>(val); }
 wstring to_wstring(unsigned long long val) { return i_to_string<wstring>(val); }
 #endif
 
+#if !defined(__BPF__) // BPF has no floating point
 string to_string(float val) { return as_string(snprintf, initial_string< string>()(), "%f", val); }
 string to_string(double val) { return as_string(snprintf, initial_string< string>()(), "%f", val); }
 string to_string(long double val) { return as_string(snprintf, initial_string< string>()(), "%Lf", val); }
 
-#if _LIBCPP_HAS_WIDE_CHARACTERS
+#  if _LIBCPP_HAS_WIDE_CHARACTERS
 wstring to_wstring(float val) { return as_string(get_swprintf(), initial_string<wstring>()(), L"%f", val); }
 wstring to_wstring(double val) { return as_string(get_swprintf(), initial_string<wstring>()(), L"%f", val); }
 wstring to_wstring(long double val) { return as_string(get_swprintf(), initial_string<wstring>()(), L"%Lf", val); }
-#endif
+#  endif
+#endif // !defined(__BPF__)
 
 _LIBCPP_END_EXPLICIT_ABI_ANNOTATIONS
 _LIBCPP_END_NAMESPACE_STD
