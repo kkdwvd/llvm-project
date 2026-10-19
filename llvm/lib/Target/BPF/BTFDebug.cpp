@@ -2138,6 +2138,42 @@ void BTFDebug::processFuncPrototypes(const Function *F) {
   }
 }
 
+void BTFDebug::processFuncAlias(const GlobalAlias &GA) {
+  // An alias of a function is a FUNC symbol of its own, which libbpf's linker
+  // looks up by name among the FUNCs of the object and refuses the object
+  // without. Nothing in the debug info describes it: the subprogram is the
+  // function's, which is what the alias is another name for. llvm-libc
+  // exports every C function this way, as an alias of its definition in the
+  // library's namespace.
+  const auto *F = dyn_cast<Function>(GA.getAliaseeObject());
+  if (!F)
+    return;
+  const DISubprogram *SP = F->getSubprogram();
+  if (!SP || SP->getUnit()->getEmissionKind() == DICompileUnit::NoDebug)
+    return;
+
+  // The function's prototype, with the argument names its definition has:
+  // the subprogram's prototype is not shared, as for a definition.
+  SmallDenseMap<uint32_t, StringRef> FuncArgNames;
+  for (const MDNode *DN : SP->getRetainedNodes())
+    if (const auto *DV = dyn_cast<DILocalVariable>(DN))
+      if (uint32_t Arg = DV->getArg();
+          Arg && DV->getScope() == SP && !FuncArgNames.contains(Arg)) {
+        visitTypeEntry(DV->getType());
+        FuncArgNames[Arg] = DV->getName();
+      }
+  uint32_t ProtoTypeId;
+  visitSubroutineType(SP->getType(), true, FuncArgNames, ProtoTypeId,
+                      F->getReturnType()->isVoidTy());
+
+  // The FUNC is named and scoped by the alias's own symbol.
+  uint8_t Scope =
+      GA.hasLocalLinkage() ? BTF::FUNC_STATIC : BTF::FUNC_GLOBAL;
+  auto FuncTypeEntry = std::make_unique<BTFTypeFunc>(
+      Asm->getSymbol(&GA)->getName(), ProtoTypeId, Scope);
+  addType(std::move(FuncTypeEntry));
+}
+
 void BTFDebug::endModule() {
   // Collect MapDef globals if not collected yet.
   if (MapDefNotCollected) {
@@ -2154,6 +2190,10 @@ void BTFDebug::endModule() {
     if (F.getName() == BPF_TRAP)
       processFuncPrototypes(&F);
   }
+
+  // Describe the aliases of functions, which have symbols of their own.
+  for (const GlobalAlias &GA : MMI->getModule()->aliases())
+    processFuncAlias(GA);
 
   for (auto &DataSec : DataSecEntries)
     addType(std::move(DataSec.second));
