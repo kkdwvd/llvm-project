@@ -134,6 +134,23 @@ shouldUseExceptionTablesForObjCExceptions(const ObjCRuntime &runtime,
 /// main flag, -fexceptions and also language specific flags to enable/disable
 /// C++ and Objective-C exceptions. This makes it possible to for example
 /// disable C++ exceptions but enable Objective-C exceptions.
+/// Whether addExceptionArgs() passes -fexceptions on, for a target that has
+/// C++ exceptions off by default, like BPF: asked for outright, or through
+/// C++ exceptions.
+static bool wantsExceptions(const ArgList &Args, types::ID InputType) {
+  if (Args.hasFlag(options::OPT_fexceptions, options::OPT_fno_exceptions,
+                   false))
+    return true;
+  if (!types::isCXX(InputType))
+    return false;
+  Arg *ExceptionArg = Args.getLastArg(
+      options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
+      options::OPT_fexceptions, options::OPT_fno_exceptions);
+  return ExceptionArg &&
+         (ExceptionArg->getOption().matches(options::OPT_fcxx_exceptions) ||
+          ExceptionArg->getOption().matches(options::OPT_fexceptions));
+}
+
 static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
                              const ToolChain &TC, bool KernelOrKext,
                              bool IsDeviceOffloadAction,
@@ -6456,9 +6473,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       options::OPT_fno_asynchronous_unwind_tables,
       (IsAsyncUnwindTablesDefault || SanitizeArgs.needsUnwindTables()) &&
           !Freestanding);
+  // The BPF backend unwinds through a function only if it has unwind tables,
+  // freestanding or not: exceptions need them.
   bool UnwindTables =
       Args.hasFlag(options::OPT_funwind_tables, options::OPT_fno_unwind_tables,
-                   IsSyncUnwindTablesDefault && !Freestanding);
+                   (IsSyncUnwindTablesDefault && !Freestanding) ||
+                       (Triple.isBPF() &&
+                        wantsExceptions(Args, Input.getType())));
   if (AsyncUnwindTables)
     CmdArgs.push_back("-funwind-tables=2");
   else if (UnwindTables)
