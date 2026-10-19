@@ -9,8 +9,10 @@
 #include <charconv>
 #include <string.h>
 
-#include "include/from_chars_floating_point.h"
-#include "include/to_chars_floating_point.h"
+#if !defined(__BPF__) // BPF has no floating point
+#  include "include/from_chars_floating_point.h"
+#  include "include/to_chars_floating_point.h"
+#endif
 
 _LIBCPP_BEGIN_NAMESPACE_STD
 _LIBCPP_BEGIN_EXPLICIT_ABI_ANNOTATIONS
@@ -37,6 +39,8 @@ _LIBCPP_DIAGNOSTIC_POP
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // This implementation is dedicated to the memory of Mary and Thavatchai.
+
+#if !defined(__BPF__) // BPF has no floating point
 
 to_chars_result to_chars(char* __first, char* __last, float __value) {
   return _Floating_to_chars<_Floating_to_chars_overload::_Plain>(__first, __last, __value, chars_format{}, 0);
@@ -90,6 +94,8 @@ template __from_chars_result<float> __from_chars_floating_point(
 
 template __from_chars_result<double> __from_chars_floating_point(
     _LIBCPP_NOESCAPE const char* __first, _LIBCPP_NOESCAPE const char* __last, chars_format __fmt);
+
+#endif // !defined(__BPF__)
 
 _LIBCPP_END_EXPLICIT_ABI_ANNOTATIONS
 _LIBCPP_END_NAMESPACE_STD
