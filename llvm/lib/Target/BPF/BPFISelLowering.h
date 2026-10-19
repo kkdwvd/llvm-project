@@ -50,6 +50,7 @@ public:
   AtomicExpansionKind
   shouldExpandAtomicRMWInIR(const AtomicRMWInst *AI) const override;
   AtomicExpansionKind shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
+  bool shouldInsertFencesForAtomic(const Instruction *I) const override;
   bool shouldInsertTrailingSeqCstFenceForAtomicStore(
       const Instruction *I) const override;
 
