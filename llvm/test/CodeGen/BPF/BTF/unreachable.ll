@@ -11,6 +11,7 @@ entry:
 
 ; CHECK:      foo:
 ; CHECK-NEXT: .Lfunc_begin0:
+; CHECK-NEXT:   .cfi_sections .debug_frame
 ; CHECK-NEXT:   .cfi_startproc
 ; CHECK-NEXT: # %bb.0:
 ; CHECK-NEXT:    call bar

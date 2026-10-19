@@ -6,6 +6,7 @@
 
 @bpf_prog1.devname = private unnamed_addr constant [3 x i8] c"lo\00", align 1
 @bpf_prog1.fmt = private unnamed_addr constant [15 x i8] c"skb %x dev %x\0A\00", align 1
+@progs = global [1 x ptr] [ptr @bpf_prog1], align 8
 
 ; Function Attrs: norecurse
 define i32 @bpf_prog1(ptr nocapture %ctx) #0 section "events/net/netif_receive_skb" {
@@ -33,8 +34,10 @@ define i32 @bpf_prog1(ptr nocapture %ctx) #0 section "events/net/netif_receive_s
   ret i32 0
 
 ; CHECK-RELOC: file format elf64-bpf
-; CHECK-RELOC: RELOCATION RECORDS FOR [.eh_frame]:
-; CHECK-RELOC: R_BPF_64_ABS64 events/net/netif_receive_skb
+; CHECK-RELOC-NOT: .eh_frame
+; CHECK-RELOC: RELOCATION RECORDS FOR [.data]:
+; CHECK-RELOC: R_BPF_64_ABS64 bpf_prog1
+; CHECK-RELOC-NOT: .eh_frame
 }
 
 ; Function Attrs: nounwind

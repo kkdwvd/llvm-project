@@ -8,14 +8,12 @@ define dso_local void @naked() naked "frame-pointer"="all" {
 ; CHECK-LE-LABEL: naked:
 ; CHECK-LE:       .Lnaked$local:
 ; CHECK-LE-NEXT:    .type .Lnaked$local,@function
-; CHECK-LE-NEXT:    .cfi_startproc
 ; CHECK-LE-NEXT:  # %bb.0:
 ; CHECK-LE-NEXT:    call main
 ;
 ; CHECK-BE-LABEL: naked:
 ; CHECK-BE:       .Lnaked$local:
 ; CHECK-BE-NEXT:    .type .Lnaked$local,@function
-; CHECK-BE-NEXT:    .cfi_startproc
 ; CHECK-BE-NEXT:  # %bb.0:
 ; CHECK-BE-NEXT:    call main
   call void @main()
@@ -26,14 +24,12 @@ define dso_local void @normal() "frame-pointer"="all" {
 ; CHECK-LE-LABEL: normal:
 ; CHECK-LE:       .Lnormal$local:
 ; CHECK-LE-NEXT:    .type .Lnormal$local,@function
-; CHECK-LE-NEXT:    .cfi_startproc
 ; CHECK-LE-NEXT:  # %bb.0:
 ; CHECK-LE-NEXT:    call main
 ;
 ; CHECK-BE-LABEL: normal:
 ; CHECK-BE:       .Lnormal$local:
 ; CHECK-BE-NEXT:    .type .Lnormal$local,@function
-; CHECK-BE-NEXT:    .cfi_startproc
 ; CHECK-BE-NEXT:  # %bb.0:
 ; CHECK-BE-NEXT:    call main
   call void @main()
