@@ -25,6 +25,11 @@
 
 #include <sys/errno.h>
 
+#elif defined(__BPF__)
+
+// A BPF program runs in the Linux kernel: its error numbers are the kernel's.
+#include "llvm-libc-macros/bpf/error-number-macros.h"
+
 #else // __APPLE__
 
 #include "llvm-libc-macros/generic-error-number-macros.h"
