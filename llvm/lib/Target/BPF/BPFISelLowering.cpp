@@ -494,6 +494,68 @@ static uint32_t *regMaskFromTemplate(const TargetRegisterInfo *TRI,
   return RegMask;
 }
 
+/// The function that a libcall of the backend calls, declared with the debug
+/// info of its C prototype, for BTF: libbpf links the call to a definition in
+/// another object through BTF, and matches the prototypes, so the types are
+/// those of a definition in C, as compiler-rt or a libc writes one. Nothing in
+/// the IR names the function, so the backend declares it, as it declares
+/// __bpf_trap. A function the module has already, declared or defined, is
+/// taken as it is.
+static Function *getOrCreateLibcall(Module *M, StringRef Name) {
+  if (auto *Fn = M->getFunction(Name))
+    return Fn;
+
+  LLVMContext &C = M->getContext();
+  Type *Ptr = PointerType::getUnqual(C);
+  Type *I32 = Type::getInt32Ty(C);
+  Type *I64 = Type::getInt64Ty(C);
+  Type *I128 = Type::getInt128Ty(C);
+  DIBuilder DB(*M);
+  DIType *VoidPtr = DB.createPointerType(nullptr, 64);
+  DIType *ConstVoidPtr = DB.createPointerType(
+      DB.createQualifiedType(dwarf::DW_TAG_const_type, nullptr), 64);
+  DIType *ULong = DB.createBasicType("unsigned long", 64, dwarf::DW_ATE_unsigned);
+  DIType *Int = DB.createBasicType("int", 32, dwarf::DW_ATE_signed);
+  DIType *Int128 = DB.createBasicType("__int128", 128, dwarf::DW_ATE_signed);
+  DIType *UInt128 =
+      DB.createBasicType("unsigned __int128", 128, dwarf::DW_ATE_unsigned);
+
+  FunctionType *FT;
+  SmallVector<Metadata *, 4> DITypes;
+  if (Name == "memcpy" || Name == "memmove") {
+    // void *memcpy(void *dst, const void *src, unsigned long n)
+    FT = FunctionType::get(Ptr, {Ptr, Ptr, I64}, false);
+    DITypes = {VoidPtr, VoidPtr, ConstVoidPtr, ULong};
+  } else if (Name == "memset") {
+    // void *memset(void *dst, int c, unsigned long n)
+    FT = FunctionType::get(Ptr, {Ptr, I32, I64}, false);
+    DITypes = {VoidPtr, VoidPtr, Int, ULong};
+  } else if (Name == "__multi3" || Name == "__divti3" || Name == "__modti3") {
+    // __int128 __multi3(__int128 a, __int128 b)
+    FT = FunctionType::get(I128, {I128, I128}, false);
+    DITypes = {Int128, Int128, Int128};
+  } else if (Name == "__udivti3" || Name == "__umodti3") {
+    // unsigned __int128 __udivti3(unsigned __int128 a, unsigned __int128 b)
+    FT = FunctionType::get(I128, {I128, I128}, false);
+    DITypes = {UInt128, UInt128, UInt128};
+  } else {
+    return nullptr;
+  }
+
+  Function *NewF = Function::Create(FT, GlobalValue::ExternalLinkage, Name, M);
+  NewF->setDSOLocal(true);
+  if (M->debug_compile_units().empty())
+    return NewF;
+
+  DISubroutineType *FuncType =
+      DB.createSubroutineType(DB.getOrCreateTypeArray(DITypes));
+  DICompileUnit *CU = *M->debug_compile_units_begin();
+  NewF->setSubprogram(DB.createFunction(CU, Name, Name, nullptr, 0, FuncType,
+                                        0, DINode::FlagPrototyped,
+                                        DISubprogram::SPFlagZero));
+  return NewF;
+}
+
 SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                      SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
@@ -613,7 +675,6 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), CLI.DL, PtrVT,
                                         G->getOffset(), 0);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, 0);
     StringRef Sym = E->getSymbol();
     if (!BPFAllowsLibcalls && Sym != BPF_TRAP && Sym != "__multi3" &&
         Sym != "__divti3" && Sym != "__modti3" && Sym != "__udivti3" &&
@@ -622,6 +683,13 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       fail(
           CLI.DL, DAG,
           Twine("A call to built-in function '" + Sym + "' is not supported."));
+    // A libcall is called as the function its C prototype declares, so that
+    // it has BTF, which libbpf links the call to a definition in another
+    // object through.
+    if (Function *F = getOrCreateLibcall(MF.getFunction().getParent(), Sym))
+      Callee = DAG.getTargetGlobalAddress(F, CLI.DL, PtrVT, 0, 0);
+    else
+      Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, 0);
   }
 
   // Returns a chain & a flag for retval copy to use.
