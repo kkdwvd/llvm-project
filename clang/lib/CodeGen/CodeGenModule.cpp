@@ -1951,6 +1951,8 @@ void CodeGenModule::Release() {
       getCodeGenOpts().CoverageDataFile.size())
     EmitCoverageFile();
 
+  EmitExternalFunctionReferences();
+
   if (CGDebugInfo *DI = getModuleDebugInfo())
     DI->finalize();
 
@@ -6425,6 +6427,37 @@ void CodeGenModule::EmitExternalDeclaration(const DeclaratorDecl *D) {
         cast<llvm::GlobalVariable>(Addr->stripPointerCasts()), VD);
   } else if (const auto *FD = dyn_cast<FunctionDecl>(D)) {
     llvm::Function *Fn = cast<llvm::Function>(Addr);
+    if (!Fn->getSubprogram())
+      DI->EmitFunctionDecl(GD, FD->getLocation(), FD->getType(), Fn);
+  }
+}
+
+void CodeGenModule::EmitExternalFunctionReferences() {
+  // BPF links a function in another object through BTF, which comes from
+  // debug info, whether the module calls the function or takes its address.
+  // EmitExternalDeclaration() describes a declaration that the source uses,
+  // but CodeGen refers to functions on its own too: to the complete
+  // destructor of what a throw throws, which it passes to __cxa_throw(), or
+  // to the virtual functions in a vtable that it emits. It also refers to
+  // constructors and destructors by their variants, of which the source uses
+  // the declaration. Describe each function declaration that the module
+  // refers to by the declaration CodeGen made it for, with its real type.
+  CGDebugInfo *DI = getModuleDebugInfo();
+  if (!DI || !getCodeGenOpts().hasReducedDebugInfo() ||
+      !getTarget().allowDebugInfoForExternalRef())
+    return;
+  // Describing one can mangle more names, so collect them first.
+  SmallVector<std::pair<GlobalDecl, llvm::Function *>, 16> Refs;
+  for (const auto &[GD, Name] : MangledDeclNames) {
+    auto *Fn = dyn_cast_or_null<llvm::Function>(GetGlobalValue(Name));
+    if (!Fn || !Fn->isDeclaration() || Fn->use_empty() || Fn->getSubprogram())
+      continue;
+    const auto *FD = dyn_cast_or_null<FunctionDecl>(GD.getDecl());
+    if (FD && !FD->hasAttr<NoDebugAttr>())
+      Refs.push_back({GD, Fn});
+  }
+  for (auto [GD, Fn] : Refs) {
+    const auto *FD = cast<FunctionDecl>(GD.getDecl());
     if (!Fn->getSubprogram())
       DI->EmitFunctionDecl(GD, FD->getLocation(), FD->getType(), Fn);
   }

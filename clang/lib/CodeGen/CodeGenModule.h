@@ -1547,6 +1547,11 @@ public:
 
   void EmitExternalDeclaration(const DeclaratorDecl *D);
 
+  /// Give every function that the module refers to and does not define the
+  /// debug info of its declaration, on a target that asks for debug info of
+  /// external references.
+  void EmitExternalFunctionReferences();
+
   void EmitVTable(CXXRecordDecl *Class);
 
   void RefreshTypeCacheForClass(const CXXRecordDecl *Class);
