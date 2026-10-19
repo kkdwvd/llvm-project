@@ -47,6 +47,9 @@ public:
   EmitInstrWithCustomInserter(MachineInstr &MI,
                               MachineBasicBlock *BB) const override;
 
+  bool shouldInsertTrailingSeqCstFenceForAtomicStore(
+      const Instruction *I) const override;
+
   bool getHasAlu32() const { return HasAlu32; }
   bool getHasJmp32() const { return HasJmp32; }
   bool getHasJmpExt() const { return HasJmpExt; }
@@ -77,6 +80,7 @@ private:
   bool HasJmp32;
   bool HasJmpExt;
   bool HasMovsx;
+  bool HasLoadAcqStoreRel;
 
   // Allows Misalignment
   bool AllowsMisalignedMemAccess;
@@ -87,6 +91,7 @@ private:
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerATOMIC_LOAD_STORE(SDValue Op, SelectionDAG &DAG) const;
+  bool isSeqCstStoreAnExchange(EVT MemVT) const;
   SDValue LowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const;
   SDValue emitFence(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain) const;
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;

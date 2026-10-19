@@ -219,6 +219,7 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
   HasJmp32 = STI.getHasJmp32();
   HasJmpExt = STI.getHasJmpExt();
   HasMovsx = STI.hasMovsx();
+  HasLoadAcqStoreRel = STI.hasLoadAcqStoreRel();
 
   AllowsMisalignedMemAccess = STI.getAllowsMisalignedMemAccess();
 }
@@ -958,18 +959,96 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getNode(BPFISD::SELECT_CC, DL, Op.getValueType(), Ops);
 }
 
+// How C++ atomics map onto BPF.
+//
+// What BPF atomics order is what the kernel runs them as, under the kernel's
+// memory model (tools/memory-model): the interpreter executes load-acquire as
+// smp_load_acquire(), store-release as smp_store_release(), and the atomics
+// that fetch (BPF_FETCH: fetch-add/and/or/xor, xchg, cmpxchg) as the kernel's
+// value-returning atomics, which are fully ordered, like smp_mb() before and
+// after. The atomics that do not fetch are unordered, like atomic_add(). The
+// JITs implement those: x86 emits a load-acquire or store-release as a plain
+// mov (TSO), a fetch-add as lock xadd, xchg as xchg; arm64 emits ldar/stlr,
+// ldaddal, swpal and casal (or exclusive loops ending in dmb ish).
+//
+// With load-acquire and store-release (-mcpu=v4):
+//   load relaxed     plain load
+//   load acquire     load-acquire
+//   load seq_cst     load-acquire
+//   store relaxed    plain store
+//   store release    store-release
+//   store seq_cst    xchg (32 and 64 bits)
+//                    store-release, full barrier (8 and 16 bits)
+//   rmw (any order)  the fetching atomic, fully ordered
+//   cmpxchg          cmpxchg, fully ordered when it succeeds; a failed one is
+//                    unordered in the kernel's memory model, like a failed
+//                    cmpxchg() (arm64's exclusive loop branches past its dmb)
+//   fence            full barrier, a fetch-add of zero on the stack
+//                    (emitFence); a singlethread fence is a compiler barrier
+//
+// This is the x86 mapping, a fully ordered exchange for seq_cst stores, which
+// the x86 JIT needs since its store-release is a plain mov; on arm64 the JIT
+// emits ldar, which is RCsc with stlr and swpal, so it is AArch64's mapping
+// too. Where there is no exchange, the store-release takes a full barrier
+// after it, the trailing-fence mapping of RISC-V. The selftests' bpf_atomic.h
+// builds smp_load_acquire(), smp_store_release() and smp_mb() the same way.
+//
+// A seq_cst load as a load-acquire gives seq_cst its single total order where
+// load-acquire is RCsc and the host is multi-copy atomic: x86-64, arm64 and
+// RISC-V. The kernel's memory model is weaker, for powerpc, which is not
+// multi-copy atomic and whose JIT emits a load-acquire as ld; lwsync (RCpc):
+// there two CPUs, each loading x and y with seq_cst loads, can see seq_cst
+// stores to x and y by two other CPUs in opposite orders (IRIW), which C++
+// forbids and only a full barrier between the two loads prevents. One way out
+// is a full barrier before every seq_cst load, which costs an atomic on the
+// stack per load on every host; the other is a powerpc JIT that emits
+// load-acquire as an RCsc sequence (sync; ld; lwsync, as powerpc maps a C++
+// seq_cst load), which costs only powerpc and makes BPF's load-acquire mean
+// what arm64's does. The second, a kernel change, is the one to propose.
+bool BPFTargetLowering::isSeqCstStoreAnExchange(EVT MemVT) const {
+  return MemVT == MVT::i64 || (MemVT == MVT::i32 && HasAlu32);
+}
+
+bool BPFTargetLowering::shouldInsertTrailingSeqCstFenceForAtomicStore(
+    const Instruction *I) const {
+  auto *SI = dyn_cast<StoreInst>(I);
+  if (!SI || SI->getOrdering() != AtomicOrdering::SequentiallyConsistent ||
+      !HasLoadAcqStoreRel)
+    return false;
+  EVT MemVT = getMemValueType(SI->getDataLayout(),
+                              SI->getValueOperand()->getType());
+  return !isSeqCstStoreAnExchange(MemVT);
+}
+
 SDValue BPFTargetLowering::LowerATOMIC_LOAD_STORE(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  SDNode *N = Op.getNode();
+  auto *N = cast<AtomicSDNode>(Op.getNode());
   SDLoc DL(N);
 
-  if (cast<AtomicSDNode>(N)->getMergedOrdering() ==
-      AtomicOrdering::SequentiallyConsistent)
-    fail(DL, DAG,
-         "sequentially consistent (seq_cst) "
-         "atomic load/store is not supported");
+  if (N->getMergedOrdering() != AtomicOrdering::SequentiallyConsistent)
+    return Op;
 
-  return Op;
+  if (!HasLoadAcqStoreRel) {
+    fail(DL, DAG,
+         "sequentially consistent (seq_cst) atomic load/store needs "
+         "load-acquire and store-release (-mcpu=v4)");
+    if (N->getOpcode() == ISD::ATOMIC_LOAD)
+      return DAG.getMergeValues(
+          {DAG.getUNDEF(Op.getValueType()), N->getChain()}, DL);
+    return N->getChain();
+  }
+
+  // A load is selected as a load-acquire (acquiring_load), a store of 8 or 16
+  // bits as a store-release (releasing_store), which AtomicExpand put a full
+  // barrier after (shouldInsertTrailingSeqCstFenceForAtomicStore).
+  EVT MemVT = N->getMemoryVT();
+  if (N->getOpcode() == ISD::ATOMIC_LOAD || !isSeqCstStoreAnExchange(MemVT))
+    return Op;
+
+  return DAG
+      .getAtomic(ISD::ATOMIC_SWAP, DL, MemVT, N->getChain(), N->getBasePtr(),
+                 N->getVal(), N->getMemOperand())
+      .getValue(1);
 }
 
 // BPF has no fence instruction, but its atomics that fetch are fully ordered,
