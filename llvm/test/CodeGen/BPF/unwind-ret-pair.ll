@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=bpfel -mcpu=v4 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
+; RUN: llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 ; RUN: llc -mtriple=bpfel -mcpu=v1 -verify-machineinstrs -filetype=asm -o - %s | FileCheck %s
 
 ; A value of 9 to 16 bytes is returned in r0 and r2. The verifier checks both

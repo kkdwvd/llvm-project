@@ -1,5 +1,6 @@
 ; RUN: not llc -mtriple=bpfel -mcpu=v4 -filetype=asm -o - %s 2>&1 | FileCheck %s
 ; RUN: not llc -mtriple=bpfel -mcpu=v4 -filetype=obj -o /dev/null %s 2>&1 | FileCheck %s
+; RUN: not llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -filetype=asm -o - %s 2>&1 | FileCheck %s
 
 ; There is no unwind_goto after a call of a nounwind function, so an unwind
 ; cannot start there.

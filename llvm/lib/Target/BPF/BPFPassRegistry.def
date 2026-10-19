@@ -20,6 +20,7 @@ MODULE_PASS("bpf-asm-printer-begin", BPFAsmPrinterBeginPass())
 MODULE_PASS("bpf-asm-printer-end", BPFAsmPrinterEndPass())
 MODULE_PASS("bpf-check-and-opt-ir", BPFCheckAndAdjustIRPass())
 MODULE_PASS("bpf-func-table", BPFFuncTablePass())
+MODULE_PASS("bpf-unwind-prepare", BPFUnwindPreparePass())
 #undef MODULE_PASS
 
 #ifndef FUNCTION_PASS
@@ -50,4 +51,5 @@ MACHINE_FUNCTION_PASS("bpf-mi-checking", BPFMIPreEmitCheckingPass())
 MACHINE_FUNCTION_PASS("bpf-mi-peephole", BPFMIPeepholePass())
 MACHINE_FUNCTION_PASS("bpf-mi-pre-emit-peephole", BPFMIPreEmitPeepholePass())
 MACHINE_FUNCTION_PASS("bpf-mi-simplify-patchable", BPFMISimplifyPatchablePass())
+MACHINE_FUNCTION_PASS("bpf-unwind-lower", BPFUnwindLowerPass())
 #undef MACHINE_FUNCTION_PASS

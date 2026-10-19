@@ -63,11 +63,7 @@ namespace {
 
 /// Turn resume into llvm.bpf.unwind.exit, and calls that may unwind into
 /// invokes.
-struct BPFUnwindPrepare : public ModulePass {
-  static char ID;
-  BPFUnwindPrepare() : ModulePass(ID) {}
-  StringRef getPassName() const override { return "BPF Unwind Prepare"; }
-
+struct BPFUnwindPrepare {
   Function *UnwindExit = nullptr;
 
   Function *getUnwindExit(Module &M) {
@@ -93,10 +89,9 @@ struct BPFUnwindPrepare : public ModulePass {
            !isa<IntrinsicInst>(CB);
   }
 
-  bool runOnModule(Module &M) override {
+  bool run(Module &M) {
     bool Changed = false;
     LLVMContext &C = M.getContext();
-    UnwindExit = nullptr;
 
     for (Function &F : M) {
       if (F.isDeclaration())
@@ -144,11 +139,7 @@ struct BPFUnwindPrepare : public ModulePass {
 };
 
 /// After register allocation, turn edges to landing pads into branches.
-struct BPFUnwindLower : public MachineFunctionPass {
-  static char ID;
-  BPFUnwindLower() : MachineFunctionPass(ID) {}
-  StringRef getPassName() const override { return "BPF Unwind Lower"; }
-
+struct BPFUnwindLower {
   /// llvm.bpf.unwind.exit leaves with the exception object in r0.
   static void moveException(MachineInstr &MI, const TargetInstrInfo &TII) {
     const MachineOperand &Exn = MI.getOperand(0);
@@ -188,7 +179,7 @@ struct BPFUnwindLower : public MachineFunctionPass {
     return nullptr;
   }
 
-  bool runOnMachineFunction(MachineFunction &MF) override {
+  bool run(MachineFunction &MF) {
     const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
     const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
     DenseMap<MCSymbol *, MachineBasicBlock *> Begin;
@@ -331,17 +322,48 @@ struct BPFUnwindLower : public MachineFunctionPass {
   }
 };
 
+struct BPFUnwindPrepareLegacy : public ModulePass {
+  static char ID;
+  BPFUnwindPrepareLegacy() : ModulePass(ID) {}
+  StringRef getPassName() const override { return "BPF Unwind Prepare"; }
+  bool runOnModule(Module &M) override { return BPFUnwindPrepare().run(M); }
+};
+
+struct BPFUnwindLowerLegacy : public MachineFunctionPass {
+  static char ID;
+  BPFUnwindLowerLegacy() : MachineFunctionPass(ID) {}
+  StringRef getPassName() const override { return "BPF Unwind Lower"; }
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    return BPFUnwindLower().run(MF);
+  }
+};
+
 } // namespace
 
-char BPFUnwindPrepare::ID = 0;
-char BPFUnwindLower::ID = 0;
+char BPFUnwindPrepareLegacy::ID = 0;
+char BPFUnwindLowerLegacy::ID = 0;
 
-INITIALIZE_PASS(BPFUnwindPrepare, "bpf-unwind-prepare", "BPF Unwind Prepare",
+INITIALIZE_PASS(BPFUnwindPrepareLegacy, "bpf-unwind-prepare",
+                "BPF Unwind Prepare", false, false)
+INITIALIZE_PASS(BPFUnwindLowerLegacy, "bpf-unwind-lower", "BPF Unwind Lower",
                 false, false)
-INITIALIZE_PASS(BPFUnwindLower, "bpf-unwind-lower", "BPF Unwind Lower", false,
-                false)
 
-ModulePass *llvm::createBPFUnwindPreparePass() {
-  return new BPFUnwindPrepare();
+ModulePass *llvm::createBPFUnwindPrepareLegacyPass() {
+  return new BPFUnwindPrepareLegacy();
 }
-FunctionPass *llvm::createBPFUnwindLowerPass() { return new BPFUnwindLower(); }
+FunctionPass *llvm::createBPFUnwindLowerLegacyPass() {
+  return new BPFUnwindLowerLegacy();
+}
+
+PreservedAnalyses BPFUnwindPreparePass::run(Module &M,
+                                            ModuleAnalysisManager &MAM) {
+  return BPFUnwindPrepare().run(M) ? PreservedAnalyses::none()
+                                   : PreservedAnalyses::all();
+}
+
+PreservedAnalyses
+BPFUnwindLowerPass::run(MachineFunction &MF,
+                        MachineFunctionAnalysisManager &MFAM) {
+  return BPFUnwindLower().run(MF) ? getMachineFunctionPassPreservedAnalyses()
+                                  : PreservedAnalyses::all();
+}
