@@ -371,6 +371,10 @@ class BTFDebug : public DebugHandlerBase {
   /// Generate types for function prototypes.
   void processFuncPrototypes(const Function *);
 
+  /// Generate a FUNC for an alias of a function with the prototype of the
+  /// function it names.
+  void processFuncAlias(const GlobalAlias &GA);
+
   /// Generate types for decl annotations.
   void processDeclAnnotations(DINodeArray Annotations, uint32_t BaseTypeId,
                               int ComponentId);
