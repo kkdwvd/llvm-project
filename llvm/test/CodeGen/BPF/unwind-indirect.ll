@@ -4,9 +4,9 @@
 ; A call through a pointer unwinds like a call by name: every call that may
 ; unwind is followed by unwind_goto, whatever the callee. An invoke goes to
 ; its own pad, a plain call to the pad the backend adds, which resumes, and a
-; call site that is nounwind, as the frontend makes one of a noexcept pointee,
-; gets none: whether a call through a pointer may unwind is the frontend's
-; decision, and the backend follows the call site.
+; call site that is nounwind, as the frontend makes one of a noexcept pointee
+; outside BPF, gets none: on BPF clang keeps the unwind edge of such a call
+; (clang/test/CodeGenCXX/bpf-indirect-call-unwind.cpp).
 
 declare void @release(ptr) nounwind
 declare i32 @__gxx_personality_v0(...)
