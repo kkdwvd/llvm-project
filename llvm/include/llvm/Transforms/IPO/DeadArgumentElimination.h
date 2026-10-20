@@ -133,7 +133,8 @@ private:
   void propagateLiveness(const RetOrArg &RA);
   bool removeDeadStuffFromFunction(Function *F);
   bool deleteDeadVarargs(Function &F);
-  bool removeDeadArgumentsFromCallers(Function &F);
+  bool removeDeadArgumentsFromCallers(Function &F,
+                                      FunctionAnalysisManager &FAM);
 };
 
 } // end namespace llvm

@@ -1475,6 +1475,10 @@ bool TargetTransformInfo::areTypesABICompatible(const Function *Caller,
   return TTIImpl->areTypesABICompatible(Caller, Callee, Types);
 }
 
+bool TargetTransformInfo::mustPreserveCallArguments(const Function &F) const {
+  return TTIImpl->mustPreserveCallArguments(F);
+}
+
 bool TargetTransformInfo::isIndexedLoadLegal(MemIndexedMode Mode,
                                              Type *Ty) const {
   return TTIImpl->isIndexedLoadLegal(Mode, Ty);

@@ -37,6 +37,17 @@ public:
       : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
         TLI(ST->getTargetLowering()) {}
 
+  /// A function with external linkage is a global subprogram, whose
+  /// parameters the kernel's verifier checks at every call site against the
+  /// types of its BTF prototype, read or not: a parameter of pointer type must
+  /// be passed a valid pointer of that type, or the program is refused. The
+  /// ABI is the whole argument list. A function with internal linkage is a
+  /// static subprogram, verified in each caller's context with what the
+  /// caller passes, and may lose its dead parameters.
+  bool mustPreserveCallArguments(const Function &F) const override {
+    return !F.hasLocalLinkage();
+  }
+
   InstructionCost getIntImmCost(const APInt &Imm, Type *Ty,
                                 TTI::TargetCostKind CostKind) const override {
     if (Imm.getBitWidth() <= 64 && isInt<32>(Imm.getSExtValue()))

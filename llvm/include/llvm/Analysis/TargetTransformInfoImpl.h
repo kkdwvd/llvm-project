@@ -1120,6 +1120,10 @@ public:
             Callee->getFnAttribute("target-features"));
   }
 
+  virtual bool mustPreserveCallArguments(const Function &F) const {
+    return false;
+  }
+
   virtual bool isIndexedLoadLegal(TTI::MemIndexedMode Mode, Type *Ty) const {
     return false;
   }

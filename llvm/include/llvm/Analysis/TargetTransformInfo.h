@@ -1961,6 +1961,13 @@ public:
                                       const Function *Callee,
                                       ArrayRef<Type *> Types) const;
 
+  /// \returns True if the arguments of a call to \p F must be passed as the
+  /// caller computes them even where \p F never reads them, because the
+  /// target takes the argument list as part of \p F's ABI, as the assembly of
+  /// a naked function may: a dead argument may then not be replaced with
+  /// poison at the call sites.
+  LLVM_ABI bool mustPreserveCallArguments(const Function &F) const;
+
   /// The type of load/store indexing.
   enum MemIndexedMode {
     MIM_Unindexed, ///< No indexing.

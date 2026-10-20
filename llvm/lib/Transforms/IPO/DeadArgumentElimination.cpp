@@ -20,6 +20,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/AttributeMask.h"
 #include "llvm/IR/Attributes.h"
@@ -77,8 +78,11 @@ public:
     if (skipModule(M))
       return false;
     DeadArgumentEliminationPass DAEP;
-    ModuleAnalysisManager DummyMAM;
-    PreservedAnalyses PA = DAEP.run(M, DummyMAM);
+    FunctionAnalysisManager FAM;
+    FAM.registerPass([] { return TargetIRAnalysis(); });
+    ModuleAnalysisManager MAM;
+    MAM.registerPass([&] { return FunctionAnalysisManagerModuleProxy(FAM); });
+    PreservedAnalyses PA = DAEP.run(M, MAM);
     return !PA.areAllPreserved();
   }
 };
@@ -229,7 +233,8 @@ bool DeadArgumentEliminationPass::deleteDeadVarargs(Function &F) {
 
 /// Checks if the given function has any arguments that are unused, and changes
 /// the caller parameters to be poison instead.
-bool DeadArgumentEliminationPass::removeDeadArgumentsFromCallers(Function &F) {
+bool DeadArgumentEliminationPass::removeDeadArgumentsFromCallers(
+    Function &F, FunctionAnalysisManager &FAM) {
   // We cannot change the arguments if this TU does not define the function or
   // if the linker may choose a function body from another TU, even if the
   // nominal linkage indicates that other copies of the function have the same
@@ -259,6 +264,13 @@ bool DeadArgumentEliminationPass::removeDeadArgumentsFromCallers(Function &F) {
     return false;
 
   if (F.use_empty())
+    return false;
+
+  // Nor functions whose target takes the argument list as the ABI, as a naked
+  // function's assembly may: on BPF the kernel's verifier checks every
+  // argument of a call to a global function against its prototype, read or
+  // not.
+  if (FAM.getResult<TargetIRAnalysis>(F).mustPreserveCallArguments(F))
     return false;
 
   SmallVector<unsigned, 8> UnusedArgs;
@@ -1083,8 +1095,10 @@ bool DeadArgumentEliminationPass::removeDeadStuffFromFunction(Function *F) {
 }
 
 PreservedAnalyses DeadArgumentEliminationPass::run(Module &M,
-                                                   ModuleAnalysisManager &) {
+                                                   ModuleAnalysisManager &MAM) {
   bool Changed = false;
+  FunctionAnalysisManager &FAM =
+      MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 
   // First pass: Do a simple check to see if any functions can have their "..."
   // removed.  We can do this if they never call va_start.  This loop cannot be
@@ -1111,7 +1125,7 @@ PreservedAnalyses DeadArgumentEliminationPass::run(Module &M,
   // Finally, look for any unused parameters in functions with non-local
   // linkage and replace the passed in parameters with poison.
   for (auto &F : M)
-    Changed |= removeDeadArgumentsFromCallers(F);
+    Changed |= removeDeadArgumentsFromCallers(F, FAM);
 
   if (!Changed)
     return PreservedAnalyses::all();
