@@ -7100,8 +7100,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // libbpf makes a hidden function a static subprogram in BTF, which the
+  // verifier checks at each call with what the caller passes, and a default
+  // one a global subprogram, checked once on its own with typed arguments. C
+  // leaves that to the author, static or not; so does C++ for the functions
+  // it writes, but its inline member functions, of a class or a class
+  // template, would be weak global subprograms with untyped pointer
+  // parameters that verify nowhere, and the global allocation functions take
+  // and return the void pointers no global subprogram may: both are hidden on
+  // BPF. An inline free function and a free function template's instance
+  // keep default visibility, as the flag's name says.
+  bool BPFCXX = Triple.isBPF() && types::isCXX(InputType);
   if (Args.hasFlag(options::OPT_fvisibility_inlines_hidden,
-                    options::OPT_fno_visibility_inlines_hidden, false))
+                   options::OPT_fno_visibility_inlines_hidden, BPFCXX))
     CmdArgs.push_back("-fvisibility-inlines-hidden");
 
   Args.AddLastArg(CmdArgs, options::OPT_fvisibility_inlines_hidden_static_local_var,
@@ -7126,6 +7137,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           options::OPT_fvisibility_global_new_delete_hidden));
       CmdArgs.push_back("-fvisibility-global-new-delete=force-hidden");
     }
+  } else if (BPFCXX) {
+    CmdArgs.push_back("-fvisibility-global-new-delete=force-hidden");
   }
 
   Args.AddLastArg(CmdArgs, options::OPT_ftlsmodel_EQ);
