@@ -950,6 +950,72 @@ void BTFDebug::processDeclAnnotations(DINodeArray Annotations,
   }
 }
 
+/// Whether \p Annotations carry the decl tag \p Tag.
+static bool hasDeclTag(DINodeArray Annotations, StringRef Tag) {
+  if (!Annotations)
+    return false;
+  for (const Metadata *Annotation : Annotations->operands()) {
+    const MDNode *MD = cast<MDNode>(Annotation);
+    if (cast<MDString>(MD->getOperand(0))->getString() == "btf_decl_tag" &&
+        cast<MDString>(MD->getOperand(1))->getString() == Tag)
+      return true;
+  }
+  return false;
+}
+
+/// A reference is never null, and neither is the object a member function
+/// is called on. The kernel types a pointer parameter of a global function
+/// as memory that may be null, which every read of it must check for, unless
+/// the parameter is tagged arg:nonnull: then the caller must pass a valid
+/// object, and the callee reads it as C++ lets it. Tag the reference
+/// parameters and the object parameter, which the source prototype in the
+/// debug info names, so that the tag follows the FUNC_PROTO where the IR's
+/// arguments shift for an sret pointer; the explicit tag a parameter carries
+/// is kept and not doubled.
+void BTFDebug::processNonnullArgs(
+    const DISubroutineType *STy, uint32_t FuncId,
+    const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap,
+    const SmallSet<uint32_t, 8> &Tagged) {
+  DITypeArray Elements = STy->getTypeArray();
+  for (unsigned I = 1, N = Elements.size(); I < N; ++I) {
+    if (Tagged.contains(I))
+      continue;
+
+    // The type under its typedefs and qualifiers.
+    const DIType *Ty = Elements[I];
+    while (const auto *DTy = dyn_cast_or_null<DIDerivedType>(Ty)) {
+      unsigned Tag = DTy->getTag();
+      if (Tag != dwarf::DW_TAG_typedef && Tag != dwarf::DW_TAG_const_type &&
+          Tag != dwarf::DW_TAG_volatile_type &&
+          Tag != dwarf::DW_TAG_restrict_type &&
+          Tag != dwarf::DW_TAG_atomic_type)
+        break;
+      Ty = DTy->getBaseType();
+    }
+    const auto *DTy = dyn_cast_or_null<DIDerivedType>(Ty);
+    if (!DTy)
+      continue;
+    unsigned Tag = DTy->getTag();
+    bool IsReference = Tag == dwarf::DW_TAG_reference_type ||
+                       Tag == dwarf::DW_TAG_rvalue_reference_type;
+    bool IsThis = Tag == dwarf::DW_TAG_pointer_type && DTy->isObjectPointer();
+    if (!IsReference && !IsThis)
+      continue;
+
+    // The parameter's place in the prototype: a nocall function's keeps only
+    // the parameters that survived.
+    int ComponentIdx = I - 1;
+    if (ArgIndexMap) {
+      auto It = ArgIndexMap->find(I);
+      if (It == ArgIndexMap->end())
+        continue;
+      ComponentIdx = It->second;
+    }
+    addType(
+        std::make_unique<BTFTypeDeclTag>(FuncId, ComponentIdx, "arg:nonnull"));
+  }
+}
+
 uint32_t BTFDebug::processDISubprogram(
     const Function &F, const DISubprogram *SP, uint32_t ProtoTypeId,
     uint8_t Scope, const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap) {
@@ -963,10 +1029,13 @@ uint32_t BTFDebug::processDISubprogram(
   uint32_t FuncId = addType(std::move(FuncTypeEntry));
 
   // Process argument annotations.
+  SmallSet<uint32_t, 8> TaggedNonnull;
   for (const MDNode *DN : SP->getRetainedNodes()) {
     if (const auto *DV = dyn_cast<DILocalVariable>(DN)) {
       uint32_t Arg = DV->getArg();
       if (Arg) {
+        if (hasDeclTag(DV->getAnnotations(), "arg:nonnull"))
+          TaggedNonnull.insert(Arg);
         if (ArgIndexMap) {
           auto It = ArgIndexMap->find(Arg);
           if (It != ArgIndexMap->end())
@@ -978,6 +1047,16 @@ uint32_t BTFDebug::processDISubprogram(
     }
   }
   processDeclAnnotations(SP->getAnnotations(), FuncId, -1);
+
+  // The kernel reads the tags of a global function's parameters, and refuses
+  // them on a static one, which it verifies in each caller's context; libbpf
+  // makes a hidden function static. A program's parameter is its context,
+  // which the kernel types on its own and takes no tag beside. Under
+  // -fno-delete-null-pointer-checks clang marks nothing nonnull in IR, and
+  // the function says so.
+  if (Scope == BTF::FUNC_GLOBAL && !F.hasHiddenVisibility() &&
+      !F.hasSection() && !F.hasFnAttribute(Attribute::NullPointerIsValid))
+    processNonnullArgs(SP->getType(), FuncId, ArgIndexMap, TaggedNonnull);
 
   return FuncId;
 }
