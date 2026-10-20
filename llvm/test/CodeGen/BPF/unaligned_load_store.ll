@@ -143,7 +143,7 @@ define i64 @test_load_i64(ptr %p) {
 ; ALIGN-DAG:    w{{[0-9]+}} = *(u8 *)(r1 + 0)
 ; ALIGN-DAG:    w{{[0-9]+}} = *(u8 *)(r1 + 1)
 ; ALIGN-DAG:    r{{[0-9]+}} <<= 8
-; ALIGN-DAG:    r{{[0-9]+}} |= r{{[0-9]+}}
+; ALIGN-DAG:    r{{[0-9]+}} += r{{[0-9]+}}
 ; ALIGN-DAG:    w{{[0-9]+}} = *(u8 *)(r1 + 2)
 ; ALIGN-DAG:    r{{[0-9]+}} <<= 16
 ; ALIGN-DAG:    w{{[0-9]+}} = *(u8 *)(r1 + 3)

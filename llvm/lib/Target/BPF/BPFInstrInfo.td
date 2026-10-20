@@ -401,6 +401,20 @@ let isAsCheapAsAMove = 1 in {
   }
 }
 
+// An or whose operands have no bit set in common is an add, and the DAG makes
+// one of an add when it can tell, a frame index plus a small index included.
+// The verifier keeps track of a pointer only through add and subtract, and
+// refuses an or on one, or, where it lets a program see pointers as numbers,
+// makes a number of it, which BPF_F_ARENA_SCALAR then accesses as an arena
+// address. So select a 64-bit disjoint or as an add, as X86 (ADD64rr_DB) and
+// RISC-V (riscv_or_disjoint) select one as their add: a pointer is not told
+// from a number here, and an add costs what an or does and is tracked as
+// exactly by the verifier when no bit is set in both. 32-bit registers hold
+// no pointers.
+def : Pat<(or_disjoint i64:$src2, i64:$src), (ADD_rr GPR:$src2, GPR:$src)>;
+def : Pat<(or_disjoint GPR:$src2, i64immSExt32:$imm),
+          (ADD_ri GPR:$src2, i64immSExt32:$imm)>;
+
 class NEG_RR<BPFOpClass Class, BPFArithOp Opc,
              dag outs, dag ins, string asmstr, list<dag> pattern>
     : TYPE_ALU_JMP<Opc.Value, 0, outs, ins, asmstr, pattern> {

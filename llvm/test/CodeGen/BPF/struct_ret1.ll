@@ -13,7 +13,7 @@ define { i64, i32 } @bar(i32 %a, i32 %b, i32 %c, i32 %d, i32 %e) #0 {
 ; CHECK-NEXT:    w2 = *(u32 *)(r1 + 0)
 ; CHECK-NEXT:    w0 = *(u32 *)(r1 + 4)
 ; CHECK-NEXT:    r0 <<= 32
-; CHECK-NEXT:    r0 |= r2
+; CHECK-NEXT:    r0 += r2
 ; CHECK-NEXT:    w2 = *(u32 *)(r1 + 8)
 ; CHECK-NEXT:    exit
 entry:

@@ -46,7 +46,7 @@ define dso_local [2 x i64] @bar3(i32 noundef %0, i32 noundef %1, i32 noundef %2)
 ; CHECK-NEXT:    r0 <<= 32
 ; CHECK-NEXT:    r1 <<= 32
 ; CHECK-NEXT:    r1 >>= 32
-; CHECK-NEXT:    r0 |= r1
+; CHECK-NEXT:    r0 += r1
 ; CHECK-NEXT:    r3 <<= 32
 ; CHECK-NEXT:    r3 s>>= 32
 ; CHECK-NEXT:    r2 = r3
@@ -71,11 +71,11 @@ define dso_local [2 x i64] @bar4(i32 noundef %0, i32 noundef %1, i32 noundef %2,
 ; CHECK-NEXT:    r1 >>= 32
 ; CHECK-NEXT:    r0 &= 1048575
 ; CHECK-NEXT:    r0 <<= 32
-; CHECK-NEXT:    r0 |= r1
+; CHECK-NEXT:    r0 += r1
 ; CHECK-NEXT:    r3 &= 1048575
 ; CHECK-NEXT:    r4 &= 16777215
 ; CHECK-NEXT:    r4 <<= 32
-; CHECK-NEXT:    r4 |= r3
+; CHECK-NEXT:    r4 += r3
 ; CHECK-NEXT:    r2 = r4
 ; CHECK-NEXT:    exit
   %5 = and i32 %1, 1048575
