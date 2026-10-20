@@ -260,6 +260,20 @@ static bool canUseNocallOptimizedSignature(
   return true;
 }
 
+/// Whether the optimizer removed the function's return value: the IR returns
+/// nothing where the subprogram's type says the source returns something, as
+/// DeadArgumentElimination leaves a function local to its unit whose callers
+/// drop what it returns. A function with an sret argument returns nothing in
+/// IR by the ABI, not by an optimization: it writes the aggregate the source
+/// returns through the pointer its caller passes in r1. Its BTF keeps the
+/// return type of the source, as the declarations of the same function in
+/// other units are described from their subprogram types alone, as pahole
+/// describes the kernel's own functions, and as the kernel and libbpf read a
+/// FUNC_PROTO that returns a struct.
+static bool hasRemovedReturnValue(const Function &F) {
+  return F.getReturnType()->isVoidTy() && !F.hasStructRetAttr();
+}
+
 /// Emit a BTF common type.
 void BTFTypeBase::emitType(MCStreamer &OS) {
   OS.AddComment(std::string(BTFKindStr[Kind]) + "(id = " + std::to_string(Id) +
@@ -1693,7 +1707,7 @@ void BTFDebug::beginFunctionImpl(const MachineFunction *MF) {
                                                        : BTF::FUNC_GLOBAL;
   bool IsNocall = SP->getType()->getCC() == dwarf::DW_CC_nocall;
   bool UseFilteredParams = false;
-  bool VoidReturn = MF->getFunction().getReturnType()->isVoidTy();
+  bool VoidReturn = hasRemovedReturnValue(MF->getFunction());
 
   if (IsNocall) {
     // For DW_CC_nocall functions, try to build a FUNC_PROTO reflecting
@@ -2164,7 +2178,7 @@ void BTFDebug::processFuncAlias(const GlobalAlias &GA) {
       }
   uint32_t ProtoTypeId;
   visitSubroutineType(SP->getType(), true, FuncArgNames, ProtoTypeId,
-                      F->getReturnType()->isVoidTy());
+                      hasRemovedReturnValue(*F));
 
   // The FUNC is named and scoped by the alias's own symbol.
   uint8_t Scope =
