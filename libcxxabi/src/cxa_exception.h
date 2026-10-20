@@ -162,6 +162,19 @@ struct _LIBCXXABI_HIDDEN __cxa_eh_globals {
 #if defined(_LIBCXXABI_ARM_EHABI)
     __cxa_exception* propagatingExceptions;
 #endif
+#if defined(__BPF__)
+    // [WIP] Exceptions whose last reference is gone, waiting for their
+    // destructor, linked through nextException: __cxa_end_catch runs them.
+    // The kernel's call through a pointer loaded from memory, which the
+    // destructor of a thrown object is called by, is work in progress: it
+    // checks every function whose address the program stores as a possible
+    // callee of every such call and refuses one that can make such a call
+    // itself, and dropping the last reference is something a destructor
+    // does, through a std::exception_ptr member. So dropping a reference
+    // only queues the exception here, and the destructors run in one place.
+    // This field and the queue go away when that call is designed.
+    __cxa_exception* pendingDestruction;
+#endif
 };
 
 extern "C" _LIBCXXABI_FUNC_VIS __cxa_eh_globals * __cxa_get_globals      () _LIBCXXABI_NOEXCEPT;
