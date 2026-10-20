@@ -27,6 +27,7 @@
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/EHPersonalities.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/IntrinsicsBPF.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/RuntimeLibcalls.h"
@@ -281,6 +282,65 @@ BPFTargetLowering::shouldExpandAtomicRMWInIR(const AtomicRMWInst *AI) const {
     // nand, min, max and the other operations BPF has no instruction for.
     return AtomicExpansionKind::CmpXChg;
   }
+}
+
+// A cmpxchg is fully ordered when it succeeds, but a failed one is unordered
+// in the kernel's memory model, like a failed cmpxchg(), and so it is on some
+// JITs: the arm64 JIT's exclusive loop without LSE, and the RISC-V JIT's
+// lr/sc loop without Zacas, read with a plain exclusive load and branch past
+// their barrier when the values differ. So a cmpxchg whose failure order is
+// acquire or seq_cst gets a full barrier on its failure path, which with the
+// relaxed read before it is acquire, and as strong as a seq_cst load
+// (LowerATOMIC_LOAD_STORE). The success path pays a branch, the failure path
+// the barrier. One of 8 or 16 bits gets it in the loop AtomicExpand makes on
+// its word, whose cmpxchg comes back here; so does the cmpxchg of a loop that
+// AtomicExpand makes for a read-modify-write, on every retry, needlessly.
+TargetLoweringBase::AtomicExpansionKind
+BPFTargetLowering::shouldExpandAtomicCmpXchgInIR(
+    const AtomicCmpXchgInst *AI) const {
+  const DataLayout &DL = AI->getDataLayout();
+  if (DL.getTypeStoreSizeInBits(AI->getCompareOperand()->getType()) <
+          getMinCmpXchgSizeInBits() ||
+      !isAcquireOrStronger(AI->getFailureOrdering()))
+    return AtomicExpansionKind::None;
+  return AtomicExpansionKind::CustomExpand;
+}
+
+void BPFTargetLowering::emitExpandAtomicCmpXchg(AtomicCmpXchgInst *CI) const {
+  AtomicOrdering FailureOrdering = CI->getFailureOrdering();
+  // The barrier orders the failure from now on, which also keeps AtomicExpand
+  // from coming back to it when it splits the block again.
+  CI->setFailureOrdering(AtomicOrdering::Monotonic);
+
+  BasicBlock *BB = CI->getParent();
+  Function *F = BB->getParent();
+  LLVMContext &Ctx = F->getContext();
+  BasicBlock *EndBB =
+      BB->splitBasicBlock(std::next(CI->getIterator()), "cmpxchg.end");
+  BasicBlock *FailureBB =
+      BasicBlock::Create(Ctx, "cmpxchg.failure", F, EndBB);
+  BB->getTerminator()->eraseFromParent();
+
+  // BPF's cmpxchg is strong: it succeeds exactly when it reads the value it
+  // compares with, which branches in one instruction.
+  IRBuilder<> Builder(BB);
+  Value *Loaded = Builder.CreateExtractValue(CI, 0, "loaded");
+  Builder.CreateCondBr(
+      Builder.CreateICmpEQ(Loaded, CI->getCompareOperand(), "success"), EndBB,
+      FailureBB);
+  Builder.SetInsertPoint(FailureBB);
+  Builder.CreateFence(FailureOrdering, CI->getSyncScopeID());
+  Builder.CreateBr(EndBB);
+
+  // Rebuild the result after the branch, so that only the loaded value, not
+  // the pair with the success bit, lives across it.
+  Builder.SetInsertPoint(EndBB->getFirstInsertionPt());
+  Value *Res =
+      Builder.CreateInsertValue(PoisonValue::get(CI->getType()), Loaded, 0);
+  Res = Builder.CreateInsertValue(
+      Res, Builder.CreateICmpEQ(Loaded, CI->getCompareOperand(), "success"),
+      1);
+  CI->replaceUsesWithIf(Res, [&](Use &U) { return U.getUser() != Loaded; });
 }
 
 bool BPFTargetLowering::isTruncateFree(Type *Ty1, Type *Ty2) const {
@@ -1019,9 +1079,10 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 //   rmw (any order)  the fetching atomic, fully ordered; one of 8 or 16 bits
 //                    or one BPF has no instruction for (max, nand, ...) is
 //                    expanded by AtomicExpand (shouldExpandAtomicRMWInIR)
-//   cmpxchg          cmpxchg, fully ordered when it succeeds; a failed one is
-//                    unordered in the kernel's memory model, like a failed
-//                    cmpxchg() (arm64's exclusive loop branches past its dmb)
+//   cmpxchg          cmpxchg, fully ordered when it succeeds; a failed one
+//                    reads unordered, so a full barrier follows a failure
+//                    when the failure order is acquire or seq_cst
+//                    (emitExpandAtomicCmpXchg)
 //   fence            full barrier, a fetch-add of zero on the stack
 //                    (emitFence); a singlethread fence is a compiler barrier
 //

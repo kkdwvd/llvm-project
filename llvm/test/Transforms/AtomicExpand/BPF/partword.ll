@@ -23,13 +23,23 @@ define i8 @xchg_i8(ptr %p, i8 %v) {
 ; CHECK-NEXT:    [[TMP4:%.*]] = load atomic i32, ptr [[ALIGNEDADDR]] monotonic, align 4
 ; CHECK-NEXT:    br label %[[ATOMICRMW_START:.*]]
 ; CHECK:       [[ATOMICRMW_START]]:
-; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP4]], [[TMP0:%.*]] ], [ [[NEWLOADED:%.*]], %[[ATOMICRMW_START]] ]
+; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP4]], [[TMP0:%.*]] ], [ [[NEWLOADED:%.*]], %[[CMPXCHG_END:.*]] ]
 ; CHECK-NEXT:    [[TMP5:%.*]] = and i32 [[LOADED]], [[INV_MASK]]
 ; CHECK-NEXT:    [[TMP6:%.*]] = or i32 [[TMP5]], [[VALOPERAND_SHIFTED]]
-; CHECK-NEXT:    [[TMP7:%.*]] = cmpxchg ptr [[ALIGNEDADDR]], i32 [[LOADED]], i32 [[TMP6]] seq_cst seq_cst, align 4
-; CHECK-NEXT:    [[SUCCESS:%.*]] = extractvalue { i32, i1 } [[TMP7]], 1
-; CHECK-NEXT:    [[NEWLOADED]] = extractvalue { i32, i1 } [[TMP7]], 0
-; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
+; CHECK-NEXT:    [[TMP7:%.*]] = cmpxchg ptr [[ALIGNEDADDR]], i32 [[LOADED]], i32 [[TMP6]] seq_cst monotonic, align 4
+; CHECK-NEXT:    [[LOADED1:%.*]] = extractvalue { i32, i1 } [[TMP7]], 0
+; CHECK-NEXT:    [[SUCCESS:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[CMPXCHG_END]], label %[[CMPXCHG_FAILURE:.*]]
+; CHECK:       [[CMPXCHG_FAILURE]]:
+; CHECK-NEXT:    fence seq_cst
+; CHECK-NEXT:    br label %[[CMPXCHG_END]]
+; CHECK:       [[CMPXCHG_END]]:
+; CHECK-NEXT:    [[TMP8:%.*]] = insertvalue { i32, i1 } poison, i32 [[LOADED1]], 0
+; CHECK-NEXT:    [[SUCCESS3:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    [[TMP9:%.*]] = insertvalue { i32, i1 } [[TMP8]], i1 [[SUCCESS3]], 1
+; CHECK-NEXT:    [[SUCCESS1:%.*]] = extractvalue { i32, i1 } [[TMP9]], 1
+; CHECK-NEXT:    [[NEWLOADED]] = extractvalue { i32, i1 } [[TMP9]], 0
+; CHECK-NEXT:    br i1 [[SUCCESS1]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
 ; CHECK:       [[ATOMICRMW_END]]:
 ; CHECK-NEXT:    [[SHIFTED:%.*]] = lshr i32 [[NEWLOADED]], [[SHIFTAMT]]
 ; CHECK-NEXT:    [[OLD:%.*]] = trunc i32 [[SHIFTED]] to i8
@@ -114,9 +124,19 @@ define { i8, i1 } @cmpxchg_i8(ptr %p, i8 %cmp, i8 %new) {
 ; CHECK-NEXT:    [[TMP9:%.*]] = phi i32 [ [[TMP8]], [[TMP0:%.*]] ], [ [[TMP15:%.*]], %[[PARTWORD_CMPXCHG_FAILURE:.*]] ]
 ; CHECK-NEXT:    [[TMP10:%.*]] = or i32 [[TMP9]], [[TMP4]]
 ; CHECK-NEXT:    [[TMP11:%.*]] = or i32 [[TMP9]], [[TMP6]]
-; CHECK-NEXT:    [[TMP12:%.*]] = cmpxchg ptr [[ALIGNEDADDR]], i32 [[TMP11]], i32 [[TMP10]] seq_cst seq_cst, align 4
-; CHECK-NEXT:    [[TMP13:%.*]] = extractvalue { i32, i1 } [[TMP12]], 0
-; CHECK-NEXT:    [[TMP14:%.*]] = extractvalue { i32, i1 } [[TMP12]], 1
+; CHECK-NEXT:    [[TMP12:%.*]] = cmpxchg ptr [[ALIGNEDADDR]], i32 [[TMP11]], i32 [[TMP10]] seq_cst monotonic, align 4
+; CHECK-NEXT:    [[LOADED:%.*]] = extractvalue { i32, i1 } [[TMP12]], 0
+; CHECK-NEXT:    [[SUCCESS:%.*]] = icmp eq i32 [[LOADED]], [[TMP11]]
+; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[CMPXCHG_END:.*]], label %[[CMPXCHG_FAILURE:.*]]
+; CHECK:       [[CMPXCHG_FAILURE]]:
+; CHECK-NEXT:    fence seq_cst
+; CHECK-NEXT:    br label %[[CMPXCHG_END]]
+; CHECK:       [[CMPXCHG_END]]:
+; CHECK-NEXT:    [[TMP18:%.*]] = insertvalue { i32, i1 } poison, i32 [[LOADED]], 0
+; CHECK-NEXT:    [[SUCCESS1:%.*]] = icmp eq i32 [[LOADED]], [[TMP11]]
+; CHECK-NEXT:    [[TMP19:%.*]] = insertvalue { i32, i1 } [[TMP18]], i1 [[SUCCESS1]], 1
+; CHECK-NEXT:    [[TMP13:%.*]] = extractvalue { i32, i1 } [[TMP19]], 0
+; CHECK-NEXT:    [[TMP14:%.*]] = extractvalue { i32, i1 } [[TMP19]], 1
 ; CHECK-NEXT:    br i1 [[TMP14]], label %[[PARTWORD_CMPXCHG_END:.*]], label %[[PARTWORD_CMPXCHG_FAILURE]]
 ; CHECK:       [[PARTWORD_CMPXCHG_FAILURE]]:
 ; CHECK-NEXT:    [[TMP15]] = and i32 [[TMP13]], [[INV_MASK]]
@@ -154,9 +174,19 @@ define { i8, i1 } @cmpxchg_weak_i8(ptr %p, i8 %cmp, i8 %new) {
 ; CHECK-NEXT:    [[TMP9:%.*]] = phi i32 [ [[TMP8]], [[TMP0:%.*]] ], [ [[TMP15:%.*]], %[[PARTWORD_CMPXCHG_FAILURE:.*]] ]
 ; CHECK-NEXT:    [[TMP10:%.*]] = or i32 [[TMP9]], [[TMP4]]
 ; CHECK-NEXT:    [[TMP11:%.*]] = or i32 [[TMP9]], [[TMP6]]
-; CHECK-NEXT:    [[TMP12:%.*]] = cmpxchg weak ptr [[ALIGNEDADDR]], i32 [[TMP11]], i32 [[TMP10]] seq_cst seq_cst, align 4
-; CHECK-NEXT:    [[TMP13:%.*]] = extractvalue { i32, i1 } [[TMP12]], 0
-; CHECK-NEXT:    [[TMP14:%.*]] = extractvalue { i32, i1 } [[TMP12]], 1
+; CHECK-NEXT:    [[TMP12:%.*]] = cmpxchg weak ptr [[ALIGNEDADDR]], i32 [[TMP11]], i32 [[TMP10]] seq_cst monotonic, align 4
+; CHECK-NEXT:    [[LOADED:%.*]] = extractvalue { i32, i1 } [[TMP12]], 0
+; CHECK-NEXT:    [[SUCCESS:%.*]] = icmp eq i32 [[LOADED]], [[TMP11]]
+; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[CMPXCHG_END:.*]], label %[[CMPXCHG_FAILURE:.*]]
+; CHECK:       [[CMPXCHG_FAILURE]]:
+; CHECK-NEXT:    fence seq_cst
+; CHECK-NEXT:    br label %[[CMPXCHG_END]]
+; CHECK:       [[CMPXCHG_END]]:
+; CHECK-NEXT:    [[TMP18:%.*]] = insertvalue { i32, i1 } poison, i32 [[LOADED]], 0
+; CHECK-NEXT:    [[SUCCESS1:%.*]] = icmp eq i32 [[LOADED]], [[TMP11]]
+; CHECK-NEXT:    [[TMP19:%.*]] = insertvalue { i32, i1 } [[TMP18]], i1 [[SUCCESS1]], 1
+; CHECK-NEXT:    [[TMP13:%.*]] = extractvalue { i32, i1 } [[TMP19]], 0
+; CHECK-NEXT:    [[TMP14:%.*]] = extractvalue { i32, i1 } [[TMP19]], 1
 ; CHECK-NEXT:    br label %[[PARTWORD_CMPXCHG_END:.*]]
 ; CHECK:       [[PARTWORD_CMPXCHG_FAILURE]]:
 ; CHECK-NEXT:    [[TMP15]] = and i32 [[TMP13]], [[INV_MASK]]
@@ -181,13 +211,23 @@ define i8 @xchg_i8_aligned(ptr %p, i8 %v) {
 ; CHECK-NEXT:    [[TMP2:%.*]] = load atomic i32, ptr [[P]] monotonic, align 4
 ; CHECK-NEXT:    br label %[[ATOMICRMW_START:.*]]
 ; CHECK:       [[ATOMICRMW_START]]:
-; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP2]], [[TMP0:%.*]] ], [ [[NEWLOADED:%.*]], %[[ATOMICRMW_START]] ]
+; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP2]], [[TMP0:%.*]] ], [ [[NEWLOADED:%.*]], %[[CMPXCHG_END:.*]] ]
 ; CHECK-NEXT:    [[TMP3:%.*]] = and i32 [[LOADED]], -256
 ; CHECK-NEXT:    [[TMP4:%.*]] = or i32 [[TMP3]], [[TMP1]]
-; CHECK-NEXT:    [[TMP5:%.*]] = cmpxchg ptr [[P]], i32 [[LOADED]], i32 [[TMP4]] seq_cst seq_cst, align 4
-; CHECK-NEXT:    [[SUCCESS:%.*]] = extractvalue { i32, i1 } [[TMP5]], 1
-; CHECK-NEXT:    [[NEWLOADED]] = extractvalue { i32, i1 } [[TMP5]], 0
-; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
+; CHECK-NEXT:    [[TMP5:%.*]] = cmpxchg ptr [[P]], i32 [[LOADED]], i32 [[TMP4]] seq_cst monotonic, align 4
+; CHECK-NEXT:    [[LOADED1:%.*]] = extractvalue { i32, i1 } [[TMP5]], 0
+; CHECK-NEXT:    [[SUCCESS:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[CMPXCHG_END]], label %[[CMPXCHG_FAILURE:.*]]
+; CHECK:       [[CMPXCHG_FAILURE]]:
+; CHECK-NEXT:    fence seq_cst
+; CHECK-NEXT:    br label %[[CMPXCHG_END]]
+; CHECK:       [[CMPXCHG_END]]:
+; CHECK-NEXT:    [[TMP6:%.*]] = insertvalue { i32, i1 } poison, i32 [[LOADED1]], 0
+; CHECK-NEXT:    [[SUCCESS3:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    [[TMP7:%.*]] = insertvalue { i32, i1 } [[TMP6]], i1 [[SUCCESS3]], 1
+; CHECK-NEXT:    [[SUCCESS1:%.*]] = extractvalue { i32, i1 } [[TMP7]], 1
+; CHECK-NEXT:    [[NEWLOADED]] = extractvalue { i32, i1 } [[TMP7]], 0
+; CHECK-NEXT:    br i1 [[SUCCESS1]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
 ; CHECK:       [[ATOMICRMW_END]]:
 ; CHECK-NEXT:    [[OLD:%.*]] = trunc i32 [[NEWLOADED]] to i8
 ; CHECK-NEXT:    ret i8 [[OLD]]
@@ -202,13 +242,23 @@ define i32 @max_i32(ptr %p, i32 %v) {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load atomic i32, ptr [[P]] monotonic, align 4
 ; CHECK-NEXT:    br label %[[ATOMICRMW_START:.*]]
 ; CHECK:       [[ATOMICRMW_START]]:
-; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP1]], [[TMP0:%.*]] ], [ [[OLD:%.*]], %[[ATOMICRMW_START]] ]
+; CHECK-NEXT:    [[LOADED:%.*]] = phi i32 [ [[TMP1]], [[TMP0:%.*]] ], [ [[OLD:%.*]], %[[CMPXCHG_END:.*]] ]
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp sgt i32 [[LOADED]], [[V]]
 ; CHECK-NEXT:    [[NEW:%.*]] = select i1 [[TMP2]], i32 [[LOADED]], i32 [[V]]
-; CHECK-NEXT:    [[TMP3:%.*]] = cmpxchg ptr [[P]], i32 [[LOADED]], i32 [[NEW]] seq_cst seq_cst, align 4
-; CHECK-NEXT:    [[SUCCESS:%.*]] = extractvalue { i32, i1 } [[TMP3]], 1
-; CHECK-NEXT:    [[OLD]] = extractvalue { i32, i1 } [[TMP3]], 0
-; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
+; CHECK-NEXT:    [[TMP3:%.*]] = cmpxchg ptr [[P]], i32 [[LOADED]], i32 [[NEW]] seq_cst monotonic, align 4
+; CHECK-NEXT:    [[LOADED1:%.*]] = extractvalue { i32, i1 } [[TMP3]], 0
+; CHECK-NEXT:    [[SUCCESS:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    br i1 [[SUCCESS]], label %[[CMPXCHG_END]], label %[[CMPXCHG_FAILURE:.*]]
+; CHECK:       [[CMPXCHG_FAILURE]]:
+; CHECK-NEXT:    fence seq_cst
+; CHECK-NEXT:    br label %[[CMPXCHG_END]]
+; CHECK:       [[CMPXCHG_END]]:
+; CHECK-NEXT:    [[TMP4:%.*]] = insertvalue { i32, i1 } poison, i32 [[LOADED1]], 0
+; CHECK-NEXT:    [[SUCCESS3:%.*]] = icmp eq i32 [[LOADED1]], [[LOADED]]
+; CHECK-NEXT:    [[TMP5:%.*]] = insertvalue { i32, i1 } [[TMP4]], i1 [[SUCCESS3]], 1
+; CHECK-NEXT:    [[SUCCESS1:%.*]] = extractvalue { i32, i1 } [[TMP5]], 1
+; CHECK-NEXT:    [[OLD]] = extractvalue { i32, i1 } [[TMP5]], 0
+; CHECK-NEXT:    br i1 [[SUCCESS1]], label %[[ATOMICRMW_END:.*]], label %[[ATOMICRMW_START]]
 ; CHECK:       [[ATOMICRMW_END]]:
 ; CHECK-NEXT:    ret i32 [[OLD]]
 ;

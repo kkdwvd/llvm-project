@@ -29,7 +29,7 @@ define i8 @xchg_i8(ptr %p, i8 %v) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    r4 = r1
 ; CHECK-NEXT:    r4 &= -4
-; CHECK-NEXT:    w3 = *(u32 *)(r4 + 0)
+; CHECK-NEXT:    w0 = *(u32 *)(r4 + 0)
 ; CHECK-NEXT:    w2 &= 255
 ; CHECK-NEXT:    w1 &= 3
 ; CHECK-NEXT:    w1 <<= 3
@@ -37,26 +37,27 @@ define i8 @xchg_i8(ptr %p, i8 %v) {
 ; CHECK-NEXT:    w5 = 255
 ; CHECK-NEXT:    w5 <<= w1
 ; CHECK-NEXT:    w5 ^= -1
+; CHECK-NEXT:    r6 = 0
 ; CHECK-NEXT:    goto .LBB1_1
-; CHECK-NEXT:  .LBB1_3: # %atomicrmw.start
+; CHECK-NEXT:  .LBB1_3: # %cmpxchg.end
 ; CHECK-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; CHECK-NEXT:    w3 = w0
-; CHECK-NEXT:    if w6 != 1 goto .LBB1_1
+; CHECK-NEXT:    if w0 != w3 goto .LBB1_1
 ; CHECK-NEXT:  # %bb.4: # %atomicrmw.end
 ; CHECK-NEXT:    w0 >>= w1
 ; CHECK-NEXT:    exit
 ; CHECK-NEXT:  .LBB1_1: # %atomicrmw.start
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    w6 = w3
-; CHECK-NEXT:    w6 &= w5
-; CHECK-NEXT:    w6 |= w2
-; CHECK-NEXT:    w0 = w3
-; CHECK-NEXT:    w0 = cmpxchg32_32(r4 + 0, w0, w6)
-; CHECK-NEXT:    w6 = 1
+; CHECK-NEXT:    w3 = w0
+; CHECK-NEXT:    w7 = w3
+; CHECK-NEXT:    w7 &= w5
+; CHECK-NEXT:    w7 |= w2
+; CHECK-NEXT:    w0 = cmpxchg32_32(r4 + 0, w0, w7)
 ; CHECK-NEXT:    if w0 == w3 goto .LBB1_3
-; CHECK-NEXT:  # %bb.2: # %atomicrmw.start
+; CHECK-NEXT:  # %bb.2: # %cmpxchg.failure
 ; CHECK-NEXT:    # in Loop: Header=BB1_1 Depth=1
-; CHECK-NEXT:    w6 = 0
+; CHECK-NEXT:    *(u64 *)(r10 - 8) = r6
+; CHECK-NEXT:    r7 = 0
+; CHECK-NEXT:    r7 = atomic_fetch_add((u64 *)(r10 - 8), r7)
 ; CHECK-NEXT:    goto .LBB1_3
   %old = atomicrmw xchg ptr %p, i8 %v seq_cst, align 1
   ret i8 %old
@@ -83,11 +84,17 @@ define { i8, i1 } @cmpxchg_weak_i8(ptr %p, i8 %cmp, i8 %new) {
 ; CHECK-NEXT:    w6 |= w3
 ; CHECK-NEXT:    w0 = w4
 ; CHECK-NEXT:    w0 = cmpxchg32_32(r1 + 0, w0, w6)
-; CHECK-NEXT:    w2 = 1
 ; CHECK-NEXT:    if w0 == w4 goto .LBB2_2
-; CHECK-NEXT:  # %bb.1: # %partword.cmpxchg.loop
+; CHECK-NEXT:  # %bb.1: # %cmpxchg.failure
+; CHECK-NEXT:    r1 = 0
+; CHECK-NEXT:    *(u64 *)(r10 - 8) = r1
+; CHECK-NEXT:    r1 = atomic_fetch_add((u64 *)(r10 - 8), r1)
+; CHECK-NEXT:  .LBB2_2: # %cmpxchg.end
+; CHECK-NEXT:    w2 = 1
+; CHECK-NEXT:    if w0 == w4 goto .LBB2_4
+; CHECK-NEXT:  # %bb.3: # %cmpxchg.end
 ; CHECK-NEXT:    w2 = 0
-; CHECK-NEXT:  .LBB2_2: # %partword.cmpxchg.end
+; CHECK-NEXT:  .LBB2_4: # %partword.cmpxchg.end
 ; CHECK-NEXT:    w0 >>= w5
 ; CHECK-NEXT:    exit
   %res = cmpxchg weak ptr %p, i8 %cmp, i8 %new seq_cst seq_cst, align 1
@@ -97,30 +104,32 @@ define { i8, i1 } @cmpxchg_weak_i8(ptr %p, i8 %cmp, i8 %new) {
 define i32 @max_i32(ptr %p, i32 %v) {
 ; CHECK-LABEL: max_i32:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    w3 = *(u32 *)(r1 + 0)
+; CHECK-NEXT:    w0 = *(u32 *)(r1 + 0)
+; CHECK-NEXT:    r4 = 0
 ; CHECK-NEXT:    goto .LBB3_1
-; CHECK-NEXT:  .LBB3_5: # %atomicrmw.start
+; CHECK-NEXT:  .LBB3_5: # %cmpxchg.end
 ; CHECK-NEXT:    # in Loop: Header=BB3_1 Depth=1
-; CHECK-NEXT:    w3 = w0
-; CHECK-NEXT:    if w4 != 1 goto .LBB3_1
+; CHECK-NEXT:    if w0 != w3 goto .LBB3_1
 ; CHECK-NEXT:  # %bb.6: # %atomicrmw.end
 ; CHECK-NEXT:    exit
 ; CHECK-NEXT:  .LBB3_1: # %atomicrmw.start
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    w4 = w3
+; CHECK-NEXT:    w3 = w0
+; CHECK-NEXT:    w5 = w3
 ; CHECK-NEXT:    if w3 s> w2 goto .LBB3_3
 ; CHECK-NEXT:  # %bb.2: # %atomicrmw.start
 ; CHECK-NEXT:    # in Loop: Header=BB3_1 Depth=1
-; CHECK-NEXT:    w4 = w2
+; CHECK-NEXT:    w5 = w2
 ; CHECK-NEXT:  .LBB3_3: # %atomicrmw.start
 ; CHECK-NEXT:    # in Loop: Header=BB3_1 Depth=1
 ; CHECK-NEXT:    w0 = w3
-; CHECK-NEXT:    w0 = cmpxchg32_32(r1 + 0, w0, w4)
-; CHECK-NEXT:    w4 = 1
+; CHECK-NEXT:    w0 = cmpxchg32_32(r1 + 0, w0, w5)
 ; CHECK-NEXT:    if w0 == w3 goto .LBB3_5
-; CHECK-NEXT:  # %bb.4: # %atomicrmw.start
+; CHECK-NEXT:  # %bb.4: # %cmpxchg.failure
 ; CHECK-NEXT:    # in Loop: Header=BB3_1 Depth=1
-; CHECK-NEXT:    w4 = 0
+; CHECK-NEXT:    *(u64 *)(r10 - 8) = r4
+; CHECK-NEXT:    r5 = 0
+; CHECK-NEXT:    r5 = atomic_fetch_add((u64 *)(r10 - 8), r5)
 ; CHECK-NEXT:    goto .LBB3_5
   %old = atomicrmw max ptr %p, i32 %v seq_cst, align 4
   ret i32 %old
