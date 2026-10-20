@@ -16,6 +16,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/CodeGen/DebugHandlerBase.h"
 #include "llvm/DebugInfo/BTF/BTF.h"
@@ -378,6 +379,13 @@ class BTFDebug : public DebugHandlerBase {
   /// Generate types for decl annotations.
   void processDeclAnnotations(DINodeArray Annotations, uint32_t BaseTypeId,
                               int ComponentId);
+
+  /// Tag the reference parameters and the object parameter of the function
+  /// \p FuncId arg:nonnull, by the parameters of \p STy, unless \p Tagged
+  /// has the parameter's number: the source tagged it itself.
+  void processNonnullArgs(const DISubroutineType *STy, uint32_t FuncId,
+                          const SmallDenseMap<uint32_t, uint32_t> *ArgIndexMap,
+                          const SmallSet<uint32_t, 8> &Tagged);
 
   /// Generate types for the DISubprogram of \p F and its arguments.
   uint32_t processDISubprogram(
