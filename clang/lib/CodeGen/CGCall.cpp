@@ -6354,6 +6354,22 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     if (auto *FPtr = dyn_cast<llvm::Function>(CalleePtr))
       if (FPtr->hasFnAttribute(llvm::Attribute::NoUnwind))
         CannotThrow = true;
+
+    // On BPF the verifier checks a call through a pointer, a virtual call
+    // included, against every function the pointer could hold, and whether a
+    // function throws is not in its BTF: the call keeps its unwind edge
+    // whatever the pointee's exception specification says, so that the
+    // verifier finds a landing pad after it. Should the pointee throw after
+    // all, the pad does what C++ asks for a broken noexcept: it unwinds to
+    // the enclosing handler, or calls std::terminate() from a noexcept
+    // function. A kernel function or helper is called by name or number, not
+    // through a pointer, and cannot throw.
+    if (CannotThrow && getLangOpts().Exceptions &&
+        getTarget().getTriple().isBPF() && !isa<llvm::Constant>(CalleePtr)) {
+      CannotThrow = false;
+      Attrs = Attrs.removeFnAttribute(getLLVMContext(),
+                                      llvm::Attribute::NoUnwind);
+    }
   }
 
   // If we made a temporary, be sure to clean up after ourselves. Note that we
