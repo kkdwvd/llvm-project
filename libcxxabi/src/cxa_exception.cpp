@@ -17,6 +17,7 @@
 #include "cxa_exception.h"
 #include "cxa_handlers.h"
 #include "fallback_malloc.h"
+#include "bpf_platform.h"
 #include "include/atomic_support.h" // from libc++
 
 #if __has_feature(address_sanitizer)
@@ -120,6 +121,27 @@ static inline int incrementHandlerCount(__cxa_exception *exception) {
 static inline  int decrementHandlerCount(__cxa_exception *exception) {
     return --exception->handlerCount;
 }
+
+#if defined(__BPF__)
+// [WIP] Destroys the exceptions whose last reference is gone, the one place
+// where the library calls a thrown object's destructor (cxa_exception.h on
+// pendingDestruction). A destructor that drops the last reference to another
+// exception queues it, and this loop destroys it next. The loop is bounded
+// for the verifier (bpf_platform.h).
+static void run_pending_destructors(__cxa_eh_globals* globals) noexcept {
+    while (_LIBCXXABI_CAN_LOOP) {
+        __cxa_exception* exception_header = globals->pendingDestruction;
+        if (NULL == exception_header)
+            break;
+        globals->pendingDestruction = exception_header->nextException;
+        exception_header->nextException = NULL;
+        void* thrown_object = thrown_object_from_cxa_exception(exception_header);
+        if (NULL != exception_header->exceptionDestructor)
+            exception_header->exceptionDestructor(thrown_object);
+        __cxa_free_exception(thrown_object);
+    }
+}
+#endif // __BPF__
 
 
 #if !defined(__BPF__)
@@ -604,6 +626,11 @@ void __cxa_end_catch() {
             globals->caughtExceptions = 0;
         }
     }
+#if defined(__BPF__)
+    // [WIP] The destructors deferred since the last handler ended, this
+    // handler's exception among them when its last reference went above.
+    run_pending_destructors(globals);
+#endif
 }
 
 void __cxa_call_terminate(void* unwind_arg) throw() {
@@ -708,9 +735,18 @@ void __cxa_decrement_exception_refcount(void *thrown_object) throw() {
         __cxa_exception* exception_header = cxa_exception_from_thrown_object(thrown_object);
         if (std::__libcpp_atomic_add(&exception_header->referenceCount, size_t(-1)) == 0)
         {
+#if defined(__BPF__)
+            // [WIP] Queued for the end of a handler (cxa_exception.h on
+            // pendingDestruction): with no reference left the exception is
+            // on no other list, so nextException is free to link it.
+            __cxa_eh_globals* globals = __cxa_get_globals();
+            exception_header->nextException = globals->pendingDestruction;
+            globals->pendingDestruction = exception_header;
+#else
             if (NULL != exception_header->exceptionDestructor)
                 exception_header->exceptionDestructor(thrown_object);
             __cxa_free_exception(thrown_object);
+#endif
         }
     }
 }
