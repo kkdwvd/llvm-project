@@ -24,9 +24,20 @@ _LIBCPP_BEGIN_EXPLICIT_ABI_ANNOTATIONS
 // should be sufficient for thread safety.
 // See https://llvm.org/PR22803
 
+// Without threads the counts are plain reads and writes. A BPF program has no
+// threads, but it runs on every CPU of the kernel at once, and a shared_ptr
+// that programs on two CPUs copy and release shares its count between them: on
+// BPF the counts are atomic whatever the thread support, as the library's own
+// counts are (src/include/atomic_support.h).
+#if _LIBCPP_HAS_THREADS || defined(__BPF__)
+#  define _LIBCPP_SHARED_COUNT_ATOMIC 1
+#else
+#  define _LIBCPP_SHARED_COUNT_ATOMIC 0
+#endif
+
 template <class _Tp>
 inline _LIBCPP_HIDE_FROM_ABI _Tp __libcpp_atomic_refcount_increment(_Tp& __t) _NOEXCEPT {
-#if _LIBCPP_HAS_THREADS
+#if _LIBCPP_SHARED_COUNT_ATOMIC
   return __atomic_add_fetch(std::addressof(__t), 1, __ATOMIC_RELAXED);
 #else
   return __t += 1;
@@ -35,7 +46,7 @@ inline _LIBCPP_HIDE_FROM_ABI _Tp __libcpp_atomic_refcount_increment(_Tp& __t) _N
 
 template <class _Tp>
 inline _LIBCPP_HIDE_FROM_ABI _Tp __libcpp_atomic_refcount_decrement(_Tp& __t) _NOEXCEPT {
-#if _LIBCPP_HAS_THREADS
+#if _LIBCPP_SHARED_COUNT_ATOMIC
   return __atomic_add_fetch(std::addressof(__t), -1, __ATOMIC_ACQ_REL);
 #else
   return __t -= 1;
@@ -70,7 +81,7 @@ public:
   }
 #endif
   _LIBCPP_HIDE_FROM_ABI long use_count() const _NOEXCEPT {
-#if _LIBCPP_HAS_THREADS
+#if _LIBCPP_SHARED_COUNT_ATOMIC
     return __atomic_load_n(&__shared_owners_, __ATOMIC_RELAXED) + 1;
 #else
     return __shared_owners_ + 1;
