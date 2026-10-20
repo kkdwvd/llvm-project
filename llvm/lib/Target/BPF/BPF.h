@@ -30,6 +30,16 @@ class TargetLowering;
 
 #define BPF_TRAP "__bpf_trap"
 
+class BPFAlignAtomicsPass : public RequiredPassInfoMixin<BPFAlignAtomicsPass> {
+  const BPFTargetMachine *TM;
+
+public:
+  BPFAlignAtomicsPass(const BPFTargetMachine *TM) : TM(TM) {}
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+};
+
+FunctionPass *createBPFAlignAtomicsLegacyPass();
+
 class BPFCheckAndAdjustIRPass
     : public RequiredPassInfoMixin<BPFCheckAndAdjustIRPass> {
 public:
@@ -120,6 +130,7 @@ InstructionSelector *createBPFInstructionSelector(const BPFTargetMachine &,
                                                   const BPFSubtarget &,
                                                   const BPFRegisterBankInfo &);
 
+void initializeBPFAlignAtomicsLegacyPass(PassRegistry &);
 void initializeBPFAsmPrinterPass(PassRegistry &);
 void initializeBPFCheckAndAdjustIRLegacyPass(PassRegistry &);
 void initializeBPFDAGToDAGISelLegacyPass(PassRegistry &);

@@ -60,6 +60,7 @@ public:
 };
 
 void BPFCodeGenPassBuilder::addIRPasses(PassManagerWrapper &PMW) {
+  addFunctionPass(BPFAlignAtomicsPass(&getTM()), PMW);
   addFunctionPass(AtomicExpandPass(TM), PMW);
   flushFPMsToMPM(PMW);
   addModulePass(BPFCheckAndAdjustIRPass(), PMW);

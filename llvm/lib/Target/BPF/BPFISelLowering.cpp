@@ -33,6 +33,7 @@
 #include "llvm/IR/RuntimeLibcalls.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -191,6 +192,10 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
     setMinCmpXchgSizeInBits(32);
   setMinimumJumpTableEntries(BPFMinimumJumpTableEntries);
 
+  // The masked address of a narrow atomic on an aligned stack object or
+  // global (combineANDOfAlignedAdd).
+  setTargetDAGCombine(ISD::AND);
+
   // Function alignments
   setMinFunctionAlignment(Align(8));
   setPrefFunctionAlignment(Align(8));
@@ -254,6 +259,84 @@ bool BPFTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) cons
   return false;
 }
 
+// The address of a global is aligned as the global is: the low bits of the
+// ld_imm64 that loads it are zero. Generic known bits say nothing of a
+// global's address, so the word of a narrow atomic in a global would be
+// found by masking the address, as for a pointer of unknown alignment
+// (combineANDOfAlignedAdd).
+void BPFTargetLowering::computeKnownBitsForTargetNode(
+    const SDValue Op, KnownBits &Known, const APInt &DemandedElts,
+    const SelectionDAG &DAG, unsigned Depth) const {
+  Known.resetAll();
+  if (!Op.isMachineOpcode() || Op.getMachineOpcode() != BPF::LDIMM64)
+    return;
+  auto *GA = dyn_cast<GlobalAddressSDNode>(Op.getOperand(0));
+  if (!GA || GA->getOffset() != 0)
+    return;
+  Align A = GA->getGlobal()->getPointerAlignment(DAG.getDataLayout());
+  Known.Zero.setLowBits(std::min(Log2(A), Known.getBitWidth() - 1));
+}
+
+// (and (add x, c1), c2), where c2 clears low bits alone and x is known to
+// have those bits clear, is (add x, (c1 & c2)): x adds nothing to the low
+// bits of x + c1 and no carry leaves them, so they are c1's, and clearing
+// them in c1 before the add is the same as after.
+//
+// AtomicExpand finds the 32-bit word around an 8- or 16-bit atomic by masking
+// its address, p & -4, when the instruction's alignment is below the word's
+// (expandPartwordAtomicRMW). BPFAlignAtomics gives the atomic the alignment
+// its address is known to have, which is the word's when the atomic sits at
+// an offset that keeps the word aligned in a stack object or a global, and no
+// mask is made. At an odd offset, a std::atomic<uint8_t> after a char say,
+// the address is not aligned and the mask stays, on the stack object or the
+// global that the pass aligned: (r10 - 7) & -8 is r10 - 8, and g + 1 & -4 is
+// g. The verifier refuses a bitwise operation on a pointer to the stack or a
+// map value, and where it lets a privileged program see pointers as numbers
+// it makes a number of the pointer, which BPF_F_ARENA_SCALAR then accesses as
+// an arena address; the add keeps it a pointer the verifier tracks, as the
+// or-as-add selection (or_disjoint) keeps an indexed stack address one.
+static SDValue combineANDOfAlignedAdd(SDNode *N, SelectionDAG &DAG) {
+  EVT VT = N->getValueType(0);
+  if (VT != MVT::i64)
+    return SDValue();
+  auto *Mask = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  SDValue Add = N->getOperand(0);
+  if (!Mask || Add.getOpcode() != ISD::ADD)
+    return SDValue();
+  auto *C1 = dyn_cast<ConstantSDNode>(Add.getOperand(1));
+  if (!C1)
+    return SDValue();
+
+  // The mask clears low bits alone: ~c2 is 2^j - 1 for some j >= 1.
+  uint64_t M = Mask->getZExtValue();
+  if (M == ~0ULL || !isMask_64(~M))
+    return SDValue();
+  unsigned Bits = llvm::countr_zero(M);
+
+  SDValue X = Add.getOperand(0);
+  if (DAG.computeKnownBits(X).countMinTrailingZeros() < Bits)
+    return SDValue();
+
+  SDLoc DL(N);
+  return DAG.getNode(ISD::ADD, DL, VT, X,
+                     DAG.getConstant(C1->getSExtValue() & M, DL, VT));
+}
+
+SDValue BPFTargetLowering::PerformDAGCombine(SDNode *N,
+                                             DAGCombinerInfo &DCI) const {
+  switch (N->getOpcode()) {
+  default:
+    break;
+  case ISD::AND:
+    return combineANDOfAlignedAdd(N, DCI.DAG);
+  }
+  return SDValue();
+}
+
+// BPFAlignAtomics gives the address its known alignment first, so that one
+// aligned to the word is not masked, a bitwise operation the verifier refuses
+// on a pointer to the stack or a map value.
+//
 // The verifier refuses the cmpxchg loops this makes: the state at the head of
 // such a loop is the same on every trip, with no bound, so it reports an
 // infinite loop. Until the loop gets a may_goto bound with a defined way to
