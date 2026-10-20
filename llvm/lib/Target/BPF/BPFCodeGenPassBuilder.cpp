@@ -62,6 +62,7 @@ public:
 void BPFCodeGenPassBuilder::addIRPasses(PassManagerWrapper &PMW) {
   const BPFSubtarget *Subtarget = getTM().getSubtargetImpl();
 
+  addFunctionPass(BPFAlignAtomicsPass(&getTM()), PMW);
   addFunctionPass(AtomicExpandPass(TM), PMW);
   flushFPMsToMPM(PMW);
   addModulePass(BPFCheckAndAdjustIRPass(), PMW);

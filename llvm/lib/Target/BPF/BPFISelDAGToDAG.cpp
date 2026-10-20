@@ -267,9 +267,11 @@ void BPFDAGToDAGISel::PreprocessLoad(SDNode *Node,
     return;
 
   SDNode *LDAddrNode = LD->getOperand(1).getNode();
-  // Match LDAddr against either global_addr or (global_addr + offset)
+  // Match LDAddr against either global_addr or (global_addr + offset). The add
+  // can be an or: the DAG makes one of an offset below the global's alignment,
+  // which the ld_imm64 of its address carries (computeKnownBitsForTargetNode).
   unsigned opcode = LDAddrNode->getOpcode();
-  if (opcode == ISD::ADD) {
+  if (opcode == ISD::ADD || CurDAG->isADDLike(LD->getOperand(1))) {
     SDValue OP1 = LDAddrNode->getOperand(0);
     SDValue OP2 = LDAddrNode->getOperand(1);
 

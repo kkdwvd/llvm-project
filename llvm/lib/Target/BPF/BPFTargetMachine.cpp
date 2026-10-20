@@ -49,6 +49,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeBPFTarget() {
 
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeGlobalISel(PR);
+  initializeBPFAlignAtomicsLegacyPass(PR);
   initializeBPFAsmPrinterPass(PR);
   initializeBPFCheckAndAdjustIRLegacyPass(PR);
   initializeBPFFuncTableLegacyPass(PR);
@@ -119,6 +120,7 @@ TargetPassConfig *BPFTargetMachine::createPassConfig(PassManagerBase &PM) {
 void BPFPassConfig::addIRPasses() {
   const BPFSubtarget *Subtarget = getBPFTargetMachine().getSubtargetImpl();
 
+  addPass(createBPFAlignAtomicsLegacyPass());
   addPass(createAtomicExpandLegacyPass());
   addPass(createBPFCheckAndAdjustIRLegacyPass());
   if (Subtarget->hasFuncTable())
