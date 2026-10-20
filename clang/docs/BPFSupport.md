@@ -127,10 +127,17 @@ clang --target=bpf a.o b.o -o prog.bpf.o
   bpftool gen object prog.bpf.o a.o b.o
 ```
 
-`bpftool` is looked for next to clang, in `-B` directories and on `PATH`.
-`-fuse-ld=bpftool` or `-fuse-ld=ld` name the default; `--ld-path=` names
-another executable; there is no other linker. `-Wl,` and `-Xlinker` pass
-bpftool's own options, which precede the command.
+`bpftool` is looked for as the linker of any toolchain is: in the `-B`
+directories first, then next to clang, then on `PATH`;
+`-print-prog-name=bpftool` prints the one a link would run. `-fuse-ld=bpftool`
+or `-fuse-ld=ld` name the default; `--ld-path=` names another executable;
+there is no other linker. `-Wl,` and `-Xlinker` pass bpftool's own options,
+which precede the command.
+
+An object links through its BTF, which the compiler builds from debug info.
+A source compiled in the same invocation without `-g` cannot be linked, and
+the driver says so before bpftool would refuse the object (`failed to find BTF
+info for object`); an object given as an input is bpftool's to check.
 
 bpftool takes files, so `-l<name>` is `lib<name>.a` from the `-L` directories,
 then the sysroot's `lib/<triple>`, then the resource directory's, passed by

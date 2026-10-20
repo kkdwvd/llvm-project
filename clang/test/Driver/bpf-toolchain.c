@@ -106,7 +106,7 @@
 // Linking is bpftool gen object with the inputs in their order. Without a
 // sysroot nothing else is linked.
 
-// RUN: %clang -### --target=bpf %s -o out.o 2>&1 | FileCheck --check-prefix=LINK %s
+// RUN: %clang -### --target=bpf -g %s -o out.o 2>&1 | FileCheck --check-prefix=LINK %s
 // LINK: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
 // LINK: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]"{{$}}
 
@@ -116,25 +116,25 @@
 // archive against the references before it only; -nolibc leaves libc out,
 // and the builtins' second copy with it, -nostdlib and -nodefaultlibs all.
 
-// RUN: %clang -### --target=bpfel %s -o out.o 2>&1 \
+// RUN: %clang -### --target=bpfel -g %s -o out.o 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK_SYSROOT %s
 // LINK_SYSROOT: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
 // LINK_SYSROOT: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a" "{{.*}}/share/bpf-sysroot/lib/bpfel-unknown-none/libc.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
 
-// RUN: %clang -### --target=bpfel %s -o out.o -nolibc 2>&1 \
+// RUN: %clang -### --target=bpfel -g %s -o out.o -nolibc 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK_NOLIBC %s
 // LINK_NOLIBC: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
 // LINK_NOLIBC: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
 
-// RUN: %clang -### --target=bpfel %s -o out.o -nostdlib 2>&1 \
+// RUN: %clang -### --target=bpfel -g %s -o out.o -nostdlib 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK %s
-// RUN: %clang -### --target=bpfel %s -o out.o -nodefaultlibs 2>&1 \
+// RUN: %clang -### --target=bpfel -g %s -o out.o -nodefaultlibs 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK %s
@@ -144,7 +144,7 @@
 // its prefix installs them beside libc.a; -print-libgcc-file-name names the
 // same file.
 
-// RUN: %clang -### --target=bpfel %s -o out.o 2>&1 \
+// RUN: %clang -### --target=bpfel -g %s -o out.o 2>&1 \
 // RUN:     --sysroot=%S/Inputs/bpf_runtimes_sysroot_tree \
 // RUN:     -resource-dir %S/Inputs/bpf_runtimes_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK_RUNTIMES %s
@@ -167,7 +167,7 @@
 // lib/<triple>, in its place among the inputs; one found nowhere is passed by
 // its file name for bpftool to report.
 
-// RUN: %clang -### --target=bpfel -nodefaultlibs %s -o out.o 2>&1 \
+// RUN: %clang -### --target=bpfel -nodefaultlibs -g %s -o out.o 2>&1 \
 // RUN:     -lfoo -L%S/Inputs/bpf_lib_tree -lbar -lnone \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
@@ -177,18 +177,30 @@
 
 // -Wl, and -Xlinker are bpftool's own options, which precede the command.
 
-// RUN: %clang -### --target=bpf %s -o out.o -Wl,-d -Xlinker --debug 2>&1 \
+// RUN: %clang -### --target=bpf -g %s -o out.o -Wl,-d -Xlinker --debug 2>&1 \
 // RUN:   | FileCheck --check-prefix=LINK_OPTIONS %s
 // LINK_OPTIONS: bpftool{{(\.exe)?}}" "-d" "--debug" "gen" "object" "out.o"
 
 // The linker is bpftool: -fuse-ld= may say so, or ld for the default, and
 // --ld-path= may name another executable, but there is no other linker.
 
-// RUN: %clang -### --target=bpf %s -o out.o -fuse-ld=bpftool 2>&1 | FileCheck --check-prefix=LINK %s
-// RUN: %clang -### --target=bpf %s -o out.o -fuse-ld=ld 2>&1 | FileCheck --check-prefix=LINK %s
-// RUN: not %clang -### --target=bpf %s -o out.o -fuse-ld=lld 2>&1 | FileCheck --check-prefix=FUSE_LD %s
+// A BPF object links through its BTF, which the compiler builds from debug
+// info: a source compiled in the same invocation without -g is refused before
+// bpftool would refuse the object ("failed to find BTF info for object"); an
+// object given as an input is bpftool's to check.
+// RUN: not %clang -### --target=bpf %s -o out.o 2>&1 | FileCheck --check-prefix=NODEBUG %s
+// RUN: not %clang -### --target=bpf -g0 %s -o out.o 2>&1 | FileCheck --check-prefix=NODEBUG %s
+// RUN: not %clang -### --target=bpf -g -g0 %s -o out.o 2>&1 | FileCheck --check-prefix=NODEBUG %s
+// NODEBUG: error: cannot link '{{.*}}bpf-toolchain.c' compiled without debug info: a BPF object links through its BTF, which -g emits
+// RUN: %clang -### --target=bpf -gline-tables-only %s -o out.o 2>&1 | FileCheck --check-prefix=LINK %s
+// RUN: %clang -### --target=bpf %S/Inputs/bpf_lib_tree/libbar.a -o out.o 2>&1 | FileCheck --check-prefix=LINK_INPUT %s
+// LINK_INPUT: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "{{.*}}/Inputs/bpf_lib_tree/libbar.a"{{$}}
+
+// RUN: %clang -### --target=bpf -g %s -o out.o -fuse-ld=bpftool 2>&1 | FileCheck --check-prefix=LINK %s
+// RUN: %clang -### --target=bpf -g %s -o out.o -fuse-ld=ld 2>&1 | FileCheck --check-prefix=LINK %s
+// RUN: not %clang -### --target=bpf -g %s -o out.o -fuse-ld=lld 2>&1 | FileCheck --check-prefix=FUSE_LD %s
 // FUSE_LD: error: invalid linker name in argument '-fuse-ld=lld'
-// RUN: not %clang -### --target=bpf %s -o out.o --ld-path=nonexistent-bpf-linker 2>&1 \
+// RUN: not %clang -### --target=bpf -g %s -o out.o --ld-path=nonexistent-bpf-linker 2>&1 \
 // RUN:   | FileCheck --check-prefix=LD_PATH %s
 // LD_PATH: error: invalid linker name in argument '--ld-path=nonexistent-bpf-linker'
 
