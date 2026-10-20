@@ -48,6 +48,9 @@
 /* Default <path> to all compiler invocations for --sysroot=<path>. */
 #define DEFAULT_SYSROOT "${DEFAULT_SYSROOT}"
 
+/* Default <path> of the sysroot for BPF targets, when --sysroot is not given. */
+#define DEFAULT_BPF_SYSROOT "${DEFAULT_BPF_SYSROOT}"
+
 /* Directory where gcc is installed. */
 #define GCC_INSTALL_PREFIX "${GCC_INSTALL_PREFIX}"
 

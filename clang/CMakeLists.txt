@@ -240,6 +240,8 @@ set(USE_DEPRECATED_GCC_INSTALL_PREFIX OFF CACHE BOOL "Temporary workaround befor
 set(GCC_INSTALL_PREFIX "" CACHE PATH "Directory where gcc is installed." )
 set(DEFAULT_SYSROOT "" CACHE STRING
   "Default <path> to all compiler invocations for --sysroot=<path>." )
+set(DEFAULT_BPF_SYSROOT "" CACHE STRING
+  "Default <path> of the sysroot for BPF targets, when --sysroot is not given." )
 if(GCC_INSTALL_PREFIX AND NOT USE_DEPRECATED_GCC_INSTALL_PREFIX)
   message(FATAL_ERROR "GCC_INSTALL_PREFIX is deprecated and will be removed. Use "
     "configuration files (https://clang.llvm.org/docs/UsersManual.html#configuration-files)"
