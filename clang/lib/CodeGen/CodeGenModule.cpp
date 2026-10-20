@@ -5068,6 +5068,22 @@ bool CodeGenModule::shouldEmitFunction(GlobalDecl GD) {
   if (CodeGenOpts.OptimizationLevel == 0 && !F->hasAttr<AlwaysInlineAttr>())
     return false;
 
+  // A target that links calls across objects through debug info, as BPF
+  // links them through BTF, gets none for a function emitted available
+  // externally: the optimizer drops the body it did not inline, and the
+  // subprogram with it, and the call that remains has nothing to link by.
+  // Refer to such a function as a declaration, which is described
+  // (EmitExternalFunctionReferences); the one that must be inlined stays.
+  // In C++ that is an inline member of an explicit instantiation
+  // declaration, which the library that instantiates it defines out of line
+  // on purpose. In C it is a C99 inline definition, which the author wrote
+  // to be inlined and which often has no external definition at all, so C
+  // keeps emitting it.
+  if (getLangOpts().CPlusPlus && getCodeGenOpts().hasReducedDebugInfo() &&
+      getTarget().allowDebugInfoForExternalRef() &&
+      !F->hasAttr<AlwaysInlineAttr>())
+    return false;
+
   // We don't import function bodies from other named module units since that
   // behavior may break ABI compatibility of the current unit.
   if (const Module *M = F->getOwningModule();
