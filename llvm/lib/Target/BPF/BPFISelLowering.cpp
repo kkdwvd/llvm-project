@@ -601,6 +601,15 @@ Function *llvm::getOrCreateBPFLibcall(Module *M, StringRef Name) {
   return Fn;
 }
 
+/// Whether V is an undefined value as the DAG builder hands one to LowerCall
+/// or LowerReturn: an UNDEF node, or a result of the MERGE_VALUES that the
+/// elements of an aggregate go through.
+static bool isUndefValue(SDValue V) {
+  while (V.getOpcode() == ISD::MERGE_VALUES)
+    V = V.getOperand(V.getResNo());
+  return V.isUndef();
+}
+
 SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                      SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
@@ -650,6 +659,15 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   for (size_t i = 0; i < OutVals.size(); ++i) {
     CCValAssign &VA = ArgLocs[i];
     SDValue &Arg = OutVals[i];
+
+    // The verifier refuses a call that reads a register nothing wrote, and
+    // the optimizer passes an undefined value where it has shown that the
+    // result it wants does not depend on it: the high half of a 128-bit
+    // operand of __multi3 when only the low half of the product is used.
+    // Pass zero, which is what every initialized register would be to the
+    // verifier anyway.
+    if (isUndefValue(Arg))
+      Arg = DAG.getConstant(0, CLI.DL, Arg.getValueType());
 
     // Promote the value if needed.
     switch (VA.getLocInfo()) {
@@ -810,7 +828,15 @@ BPFTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     if (!VA.isRegLoc())
       report_fatal_error("stack return values are not supported");
 
-    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), OutVals[i], Glue);
+    // The verifier reads r0 at every exit, and the copy of an undefined
+    // value into it is dropped, so a function that returns one would leave
+    // the register unwritten: return zero, as an undefined argument is
+    // passed as zero.
+    SDValue Val = OutVals[i];
+    if (isUndefValue(Val))
+      Val = DAG.getConstant(0, DL, Val.getValueType());
+
+    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Glue);
 
     // Guarantee that all emitted copies are stuck together,
     // avoiding something bad.
