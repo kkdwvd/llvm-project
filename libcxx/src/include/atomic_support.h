@@ -13,7 +13,13 @@
 
 _LIBCPP_BEGIN_NAMESPACE_STD
 
-#if _LIBCPP_HAS_THREADS
+// Without threads the operations below are plain reads and writes. A BPF
+// program has no threads, but it runs on every CPU of the kernel at once, and
+// what the library counts with these, the references to an exception object
+// that std::exception_ptr copies hold, is shared between those CPUs: on BPF
+// they are the compiler's atomic builtins whatever the thread support, which
+// the backend lowers to the kernel's atomic instructions.
+#if _LIBCPP_HAS_THREADS || defined(__BPF__)
 
 enum __libcpp_atomic_order {
   _AO_Relaxed = __ATOMIC_RELAXED,
@@ -124,7 +130,7 @@ inline _LIBCPP_HIDE_FROM_ABI bool __libcpp_atomic_compare_exchange_strong(
   return false;
 }
 
-#endif // _LIBCPP_HAS_THREADS
+#endif // _LIBCPP_HAS_THREADS || __BPF__
 
 _LIBCPP_END_NAMESPACE_STD
 
