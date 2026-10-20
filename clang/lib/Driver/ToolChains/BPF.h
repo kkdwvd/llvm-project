@@ -36,12 +36,18 @@ public:
 namespace toolchains {
 
 /// The toolchain of the BPF targets, bpfel-unknown-none and bpfeb-unknown-none
-/// however they are spelled. It compiles as the generic ELF toolchain did and
-/// links with bpftool.
+/// however they are spelled. It compiles against a sysroot laid out like
+/// wasi-sdk's, when there is one, and links with bpftool. See
+/// clang/docs/BPFSupport.md.
 class LLVM_LIBRARY_VISIBILITY BPF final : public ToolChain {
 public:
   BPF(const Driver &D, const llvm::Triple &Triple,
       const llvm::opt::ArgList &Args);
+
+  /// The sysroot the toolchain compiles against, or empty: --sysroot, else
+  /// the configured default, else share/bpf-sysroot next to the
+  /// installation, and only if it has the layout.
+  StringRef getSysRoot() const { return SysRoot; }
 
   /// The archive for -l<Name>, searched for in Dirs and then the toolchain's
   /// own directories, or the bare file name if it is in none of them.
@@ -68,6 +74,7 @@ public:
   std::string getMultiarchTriple(const Driver &D,
                                  const llvm::Triple &TargetTriple,
                                  StringRef SysRoot) const override;
+  std::string computeSysRoot() const override;
   std::string getCompilerRTPath() const override;
 
   void
@@ -87,9 +94,12 @@ protected:
   Tool *buildLinker() const override;
 
 private:
+  std::string findSysRoot() const;
+
   /// bpfel-unknown-none or bpfeb-unknown-none: the name of the per-target
   /// directories, whatever the triple was spelled as.
   std::string MultiarchTriple;
+  std::string SysRoot;
 };
 
 } // end namespace toolchains

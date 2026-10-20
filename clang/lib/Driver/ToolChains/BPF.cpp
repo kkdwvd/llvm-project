@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "BPF.h"
+#include "clang/Config/config.h"
 #include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -23,11 +24,11 @@ using namespace clang::driver::toolchains;
 using namespace clang;
 using namespace llvm::opt;
 
-/// The directory of a resource directory or installation that holds the
-/// target's files is named by the canonical triple, with the vendor as
-/// wasi-sdk keeps it (include/wasm32-wasi is wasi-sdk's own shortening):
-/// --target=bpf is the host's byte order, and bpfel, bpf-none and
-/// bpfel-unknown-none all name bpfel-unknown-none.
+/// The directory of a BPF sysroot, resource directory or installation that
+/// holds the target's files is named by the canonical triple, with the
+/// vendor as wasi-sdk keeps it (include/wasm32-wasi is wasi-sdk's own
+/// shortening): --target=bpf is the host's byte order, and bpfel, bpf-none
+/// and bpfel-unknown-none all name bpfel-unknown-none.
 std::string BPF::getMultiarchTriple(const Driver &D,
                                     const llvm::Triple &TargetTriple,
                                     StringRef SysRoot) const {
@@ -36,9 +37,36 @@ std::string BPF::getMultiarchTriple(const Driver &D,
       .str();
 }
 
+/// The sysroot is --sysroot, else the DEFAULT_BPF_SYSROOT the compiler was
+/// built with, else share/bpf-sysroot next to the installation, as wasi-sdk
+/// puts its sysroot in share/wasi-sysroot. Only the first of those that is
+/// given counts, and it is a BPF sysroot only if it has include/<triple>:
+/// a --sysroot without it is a root for the kernel's headers, which C BPF
+/// programs took their <linux/*.h> from under it before this toolchain, and
+/// still do.
+std::string BPF::findSysRoot() const {
+  const Driver &D = getDriver();
+  SmallString<128> Path;
+  if (!D.SysRoot.empty()) {
+    Path = D.SysRoot;
+  } else if (StringRef(DEFAULT_BPF_SYSROOT) != "") {
+    Path = DEFAULT_BPF_SYSROOT;
+  } else {
+    Path = D.Dir;
+    llvm::sys::path::append(Path, "..", "share", "bpf-sysroot");
+  }
+
+  SmallString<128> IncludeDir(Path);
+  llvm::sys::path::append(IncludeDir, "include", MultiarchTriple);
+  if (!getVFS().exists(IncludeDir))
+    return "";
+  return std::string(Path);
+}
+
 BPF::BPF(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     : ToolChain(D, Triple, Args),
-      MultiarchTriple(getMultiarchTriple(D, Triple, D.SysRoot)) {
+      MultiarchTriple(getMultiarchTriple(D, Triple, D.SysRoot)),
+      SysRoot(findSysRoot()) {
   // bpftool next to clang comes before the one on PATH.
   getProgramPaths().push_back(D.Dir);
 
@@ -50,11 +78,21 @@ BPF::BPF(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   getLibraryPaths().clear();
   getLibraryPaths().push_back(std::string(RuntimeDir));
 
-  // Where -l libraries are: the runtime directory. Nothing is taken from next
-  // to the installation or the host.
+  // Where -l libraries and the C++ standard library are: the sysroot's
+  // per-target lib, then the runtime directory. Nothing is taken from next to
+  // the installation or the host.
   getFilePaths().clear();
+  if (!SysRoot.empty()) {
+    SmallString<128> LibDir(SysRoot);
+    llvm::sys::path::append(LibDir, "lib", MultiarchTriple);
+    getFilePaths().push_back(std::string(LibDir));
+  }
   if (getVFS().exists(RuntimeDir))
     getFilePaths().push_back(std::string(RuntimeDir));
+}
+
+std::string BPF::computeSysRoot() const {
+  return SysRoot.empty() ? getDriver().SysRoot : SysRoot;
 }
 
 std::string BPF::getCompilerRTPath() const {
@@ -76,6 +114,12 @@ ToolChain::CXXStdlibType BPF::GetCXXStdlibType(const ArgList &Args) const {
 void BPF::addClangTargetOptions(const ArgList &DriverArgs,
                                 ArgStringList &CC1Args, BoundArch BA,
                                 Action::OffloadKind) const {
+  // With a sysroot the headers are its own, never the host's /usr/include
+  // that the frontend would add for a target without an OS. Without one the
+  // frontend goes on adding them, as it did before the toolchain existed.
+  if (!SysRoot.empty())
+    CC1Args.push_back("-nostdsysteminc");
+
   if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
                           options::OPT_fno_use_init_array, true))
     CC1Args.push_back("-fno-use-init-array");
@@ -83,13 +127,54 @@ void BPF::addClangTargetOptions(const ArgList &DriverArgs,
 
 void BPF::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
                                     ArgStringList &CC1Args) const {
-  // The driver adds no directory: the frontend adds the host's, as it does
-  // for any target without an OS, which is what BPF programs are built with.
+  if (SysRoot.empty() || DriverArgs.hasArg(options::OPT_nostdinc))
+    return;
+
+  if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
+    SmallString<128> P(getDriver().ResourceDir);
+    llvm::sys::path::append(P, "include");
+    addSystemInclude(DriverArgs, CC1Args, P);
+  }
+
+  if (DriverArgs.hasArg(options::OPT_nostdlibinc))
+    return;
+
+  // The target's headers first, then what the sysroot shares between its
+  // targets, as wasi-sdk and the baremetal layouts order them.
+  SmallString<128> P(SysRoot);
+  llvm::sys::path::append(P, "include", MultiarchTriple);
+  addSystemInclude(DriverArgs, CC1Args, P);
+  P = SysRoot;
+  llvm::sys::path::append(P, "include");
+  addSystemInclude(DriverArgs, CC1Args, P);
 }
 
 void BPF::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
                                        ArgStringList &CC1Args) const {
-  // There is no C++ standard library to add.
+  if (SysRoot.empty() ||
+      DriverArgs.hasArg(options::OPT_nostdinc, options::OPT_nostdlibinc,
+                        options::OPT_nostdincxx))
+    return;
+  if (GetCXXStdlibType(DriverArgs) != ToolChain::CST_Libcxx)
+    return;
+
+  // libc++'s headers are in include/<triple>/c++/v1 with their __config_site,
+  // or that directory holds the __config_site alone over the headers in
+  // include/c++/v1, as a runtimes build with per-target directories installs
+  // them. Either way the per-target directory comes first.
+  SmallString<128> TargetDir(SysRoot);
+  llvm::sys::path::append(TargetDir, "include", MultiarchTriple);
+  SmallString<128> SharedDir(SysRoot);
+  llvm::sys::path::append(SharedDir, "include");
+
+  for (StringRef Dir : {StringRef(TargetDir), StringRef(SharedDir)}) {
+    std::string Version = detectLibcxxVersion(Dir);
+    if (Version.empty())
+      continue;
+    SmallString<128> P(Dir);
+    llvm::sys::path::append(P, "c++", Version);
+    addSystemInclude(DriverArgs, CC1Args, P);
+  }
 }
 
 std::string BPF::findLibrary(StringRef Name,
@@ -193,6 +278,16 @@ void bpf::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("object");
   CmdArgs.push_back(Output.getFilename());
   CmdArgs.append(InputArgs);
+
+  // The default libraries are the sysroot's: without one there is nothing
+  // to link but what was named. The C++ standard library when the driver is
+  // clang++, then compiler-rt's builtins from the resource directory.
+  if (!TC.getSysRoot().empty() &&
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
+    if (TC.ShouldLinkCXXStdlib(Args))
+      TC.AddCXXStdlibLibArgs(Args, CmdArgs);
+    AddRunTimeLibs(TC, TC.getDriver(), CmdArgs, Args);
+  }
 
   C.addCommand(std::make_unique<Command>(JA, *this,
                                          ResponseFileSupport::AtFileCurCP(),

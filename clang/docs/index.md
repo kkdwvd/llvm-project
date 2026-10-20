@@ -62,6 +62,7 @@ ThinLTO
 APINotes
 DebuggingCoroutines
 AMDGPUSupport
+BPFSupport
 RISCVSupport
 CIR/index
 CommandGuide/index
@@ -158,6 +159,7 @@ LLVMExceptionHandlingCodeGen
 * {doc}`APINotes`
 * {doc}`DebuggingCoroutines`
 * {doc}`AMDGPUSupport`
+* {doc}`BPFSupport`
 * {doc}`RISCVSupport`
 * {doc}`CXXTypeAwareAllocators`
 * {doc}`CIR/index`
