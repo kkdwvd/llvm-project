@@ -8,6 +8,7 @@
 
 #include "BPF.h"
 #include "clang/Config/config.h"
+#include "clang/Driver/Action.h"
 #include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -267,7 +268,25 @@ void bpf::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                const ArgList &Args,
                                const char *LinkingOutput) const {
   const auto &TC = static_cast<const toolchains::BPF &>(getToolChain());
+  const Driver &D = TC.getDriver();
   const char *Exec = Args.MakeArgString(getLinkerPath(Args));
+
+  // libbpf links an object through its BTF, which the compiler builds from
+  // debug info: a source compiled without -g gives an object without any,
+  // which bpftool refuses once everything is compiled ("failed to find BTF
+  // info for object"). Say so first, for a source this invocation compiles;
+  // an object given as an input is bpftool's to check.
+  const Arg *Debug = Args.getLastArg(options::OPT_g_Group);
+  if (!Debug || Debug->getOption().matches(options::OPT_g0) ||
+      Debug->getOption().matches(options::OPT_ggdb0)) {
+    for (const auto &II : Inputs) {
+      if (!II.isFilename() || !II.getAction() ||
+          isa<InputAction>(II.getAction()))
+        continue;
+      D.Diag(diag::err_drv_bpf_link_without_debug_info) << II.getBaseInput();
+      break;
+    }
+  }
 
   // Nothing the compiler is told about the output applies to the linker.
   Args.ClaimAllArgs(options::OPT_g_Group);
@@ -324,10 +343,10 @@ void bpf::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!TC.getSysRoot().empty() && !NoDefaultLibs) {
     if (TC.ShouldLinkCXXStdlib(Args))
       TC.AddCXXStdlibLibArgs(Args, CmdArgs);
-    AddRunTimeLibs(TC, TC.getDriver(), CmdArgs, Args);
+    AddRunTimeLibs(TC, D, CmdArgs, Args);
     if (!NoLibc) {
       CmdArgs.push_back(Args.MakeArgString(TC.findLibrary("c", {})));
-      AddRunTimeLibs(TC, TC.getDriver(), CmdArgs, Args);
+      AddRunTimeLibs(TC, D, CmdArgs, Args);
     }
   }
 

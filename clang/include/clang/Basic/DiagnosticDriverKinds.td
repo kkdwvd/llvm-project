@@ -240,6 +240,9 @@ def err_drv_invalid_Xopenmp_target_with_args : Error<
   "invalid -Xopenmp-target argument: '%0', options requiring arguments are unsupported">;
 def err_drv_argument_only_allowed_with : Error<
   "invalid argument '%0' only allowed with '%1'">;
+def err_drv_bpf_link_without_debug_info : Error<
+  "cannot link '%0' compiled without debug info: a BPF object links through "
+  "its BTF, which -g emits">;
 def err_drv_opt_unsupported_input_type : Error<
   "'%0' invalid for input of type %1">;
 def err_drv_amdgpu_ieee_without_no_honor_nans : Error<
