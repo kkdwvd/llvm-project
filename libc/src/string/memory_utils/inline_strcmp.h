@@ -11,6 +11,7 @@
 
 #include "src/__support/macros/attributes.h" // LIBC_INLINE
 #include "src/__support/macros/config.h"     // LIBC_NAMESPACE_DECL
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 #include <stddef.h>
 
 namespace LIBC_NAMESPACE_DECL {
@@ -19,7 +20,7 @@ template <typename Comp>
 LIBC_INLINE constexpr int inline_strcmp(const char *left, const char *right,
                                         Comp &&comp) {
   // TODO: Look at benefits for comparing words at a time.
-  for (; *left && !comp(*left, *right); ++left, ++right)
+  for (; *left && !comp(*left, *right) && LIBC_CAN_LOOP; ++left, ++right)
     ;
   return comp(*reinterpret_cast<const unsigned char *>(left),
               *reinterpret_cast<const unsigned char *>(right));
@@ -32,7 +33,7 @@ LIBC_INLINE constexpr int inline_strncmp(const char *left, const char *right,
     return 0;
 
   // TODO: Look at benefits for comparing words at a time.
-  for (; n > 1; --n, ++left, ++right) {
+  for (; n > 1 && LIBC_CAN_LOOP; --n, ++left, ++right) {
     char lc = *left;
     if (!comp(lc, '\0') || comp(lc, *right))
       break;

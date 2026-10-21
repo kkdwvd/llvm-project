@@ -78,4 +78,8 @@
 #define LIBC_TARGET_ARCH_IS_LFI
 #endif
 
+#if defined(__BPF__)
+#define LIBC_TARGET_ARCH_IS_BPF
+#endif
+
 #endif // LLVM_LIBC_SRC___SUPPORT_MACROS_PROPERTIES_ARCHITECTURES_H

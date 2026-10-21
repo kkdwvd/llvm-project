@@ -37,9 +37,10 @@ LIBC_INLINE size_t complementary_span(const char *src, const char *segment) {
   const char *initial = src;
   cpp::bitset<256> bitset;
 
-  for (; *segment; ++segment)
+  for (; *segment && LIBC_CAN_LOOP; ++segment)
     bitset.set(*reinterpret_cast<const unsigned char *>(segment));
-  for (; *src && !bitset.test(*reinterpret_cast<const unsigned char *>(src));
+  for (; *src && !bitset.test(*reinterpret_cast<const unsigned char *>(src)) &&
+         LIBC_CAN_LOOP;
        ++src)
     ;
   return static_cast<size_t>(src - initial);
@@ -104,7 +105,7 @@ template <bool ReturnNull = true>
 LIBC_INLINE constexpr static char *strchr_implementation(const char *src,
                                                          int c) {
   char ch = static_cast<char>(c);
-  for (; *src && *src != ch; ++src)
+  for (; *src && *src != ch && LIBC_CAN_LOOP; ++src)
     ;
   char *ret = ReturnNull ? nullptr : const_cast<char *>(src);
   return *src == ch ? const_cast<char *>(src) : ret;
@@ -114,13 +115,14 @@ LIBC_INLINE constexpr static char *strrchr_implementation(const char *src,
                                                           int c) {
   char ch = static_cast<char>(c);
   char *last_occurrence = nullptr;
-  while (true) {
+  while (LIBC_CAN_LOOP) {
     if (*src == ch)
       last_occurrence = const_cast<char *>(src);
     if (!*src)
       return last_occurrence;
     ++src;
   }
+  return last_occurrence;
 }
 
 // Returns the first occurrence of 'ch' within the first 'n' characters of

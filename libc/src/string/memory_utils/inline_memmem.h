@@ -11,6 +11,7 @@
 
 #include "src/__support/macros/attributes.h" // LIBC_INLINE
 #include "src/__support/macros/config.h"     // LIBC_NAMESPACE_DECL
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 
 #include <stddef.h>
 
@@ -30,9 +31,10 @@ inline_memmem(const void *haystack, size_t haystack_len, const void *needle,
 
   const unsigned char *h = static_cast<const unsigned char *>(haystack);
   const unsigned char *n = static_cast<const unsigned char *>(needle);
-  for (size_t i = 0; i <= (haystack_len - needle_len); ++i) {
-    size_t j = 0;
-    for (; j < needle_len && !comp(h[i + j], n[j]); ++j)
+  for (size_t i = LIBC_OPAQUE_ZERO; i <= (haystack_len - needle_len) && LIBC_CAN_LOOP;
+       ++i) {
+    size_t j = LIBC_OPAQUE_ZERO;
+    for (; j < needle_len && !comp(h[i + j], n[j]) && LIBC_CAN_LOOP; ++j)
       ;
     if (j == needle_len)
       return const_cast<unsigned char *>(h + i);

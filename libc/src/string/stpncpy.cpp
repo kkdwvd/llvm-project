@@ -12,6 +12,7 @@
 #include "src/string/memory_utils/inline_bzero.h"
 
 #include "src/__support/common.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 
 namespace LIBC_NAMESPACE_DECL {
 
@@ -24,7 +25,7 @@ LLVM_LIBC_FUNCTION(char *, stpncpy,
   }
   size_t i;
   // Copy up until \0 is found.
-  for (i = 0; i < n && src[i] != '\0'; ++i)
+  for (i = LIBC_OPAQUE_ZERO; i < n && src[i] != '\0' && LIBC_CAN_LOOP; ++i)
     dest[i] = src[i];
   // When n>strlen(src), n-strlen(src) \0 are appended.
   if (n > i)

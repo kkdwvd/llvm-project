@@ -11,6 +11,7 @@
 #include "src/__support/common.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/macros/null_check.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 #include <stddef.h> // For size_t.
 
 namespace LIBC_NAMESPACE_DECL {
@@ -22,12 +23,12 @@ LLVM_LIBC_FUNCTION(char *, strncpy,
     LIBC_CRASH_ON_NULLPTR(dest);
     LIBC_CRASH_ON_NULLPTR(src);
   }
-  size_t i = 0;
+  size_t i = LIBC_OPAQUE_ZERO;
   // Copy up until \0 is found.
-  for (; i < n && src[i] != '\0'; ++i)
+  for (; i < n && src[i] != '\0' && LIBC_CAN_LOOP; ++i)
     dest[i] = src[i];
   // When n>strlen(src), n-strlen(src) \0 are appended.
-  for (; i < n; ++i)
+  for (; i < n && LIBC_CAN_LOOP; ++i)
     dest[i] = '\0';
   return dest;
 }

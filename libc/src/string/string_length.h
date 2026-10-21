@@ -28,6 +28,7 @@
     (defined(LIBC_TARGET_CPU_HAS_SVE) || defined(__ARM_NEON))
 #include "src/string/memory_utils/aarch64/inline_strlen.h"
 #endif
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP, LIBC_OPAQUE_ZERO
 
 // Set sensible defaults
 #ifndef LIBC_COPT_STRING_LENGTH_IMPL
@@ -54,21 +55,21 @@ namespace element {
 // of a null terminator.
 LIBC_INLINE size_t string_length(const char *src) {
   size_t length;
-  for (length = 0; *src; ++src, ++length)
+  for (length = LIBC_OPAQUE_ZERO; *src && LIBC_CAN_LOOP; ++src, ++length)
     ;
   return length;
 }
 
 template <typename T> LIBC_INLINE size_t string_length_element(const T *src) {
   size_t length;
-  for (length = 0; *src; ++src, ++length)
+  for (length = LIBC_OPAQUE_ZERO; *src && LIBC_CAN_LOOP; ++src, ++length)
     ;
   return length;
 }
 
 LIBC_INLINE void *find_first_character(const unsigned char *src,
                                        unsigned char ch, size_t n) {
-  for (; n && *src != ch; --n, ++src)
+  for (; n && *src != ch && LIBC_CAN_LOOP; --n, ++src)
     ;
   return n ? const_cast<unsigned char *>(src) : nullptr;
 }

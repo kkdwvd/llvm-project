@@ -33,6 +33,9 @@
 #elif defined(LIBC_TARGET_ARCH_IS_GPU) || defined(LIBC_TARGET_ARCH_IS_WASM)
 #include "src/string/memory_utils/generic/builtin.h"
 #define LIBC_SRC_STRING_MEMORY_UTILS_MEMSET inline_memset_builtin
+#elif defined(LIBC_TARGET_ARCH_IS_BPF)
+#include "src/string/memory_utils/bpf/inline_memset.h"
+#define LIBC_SRC_STRING_MEMORY_UTILS_MEMSET inline_memset_bpf
 #else
 #include "src/string/memory_utils/generic/byte_per_byte.h"
 #define LIBC_SRC_STRING_MEMORY_UTILS_MEMSET inline_memset_byte_per_byte
