@@ -49,6 +49,8 @@ const EHPersonality EHPersonality::XL_CPlusPlus = {"__xlcxx_personality_v1",
                                                    nullptr};
 const EHPersonality EHPersonality::ZOS_CPlusPlus = {"__zos_cxx_personality_v2",
                                                     nullptr};
+const EHPersonality EHPersonality::GNU_BPF_CPlusPlus = {
+    "__gxx_bpf_personality_v0", nullptr};
 
 static const EHPersonality &getCPersonality(const TargetInfo &Target,
                                             const CodeGenOptions &CGOpts) {
@@ -104,6 +106,10 @@ const EHPersonality &getCXXEHPersonality(const TargetInfo &Target,
     return EHPersonality::MSVC_CxxFrameHandler3;
   if (T.isOSAIX())
     return EHPersonality::XL_CPlusPlus;
+  // The kernel unwinds and runs no personality routine between the frames,
+  // as the VM does not in Wasm: a landing pad calls the personality itself.
+  if (T.isBPF())
+    return EHPersonality::GNU_BPF_CPlusPlus;
   if (CGOpts.hasSjLjExceptions())
     return EHPersonality::GNU_CPlusPlus_SJLJ;
   if (CGOpts.hasDWARFExceptions())

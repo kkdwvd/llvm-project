@@ -50,6 +50,7 @@ struct EHPersonality {
   static const EHPersonality GNU_Wasm_CPlusPlus;
   static const EHPersonality XL_CPlusPlus;
   static const EHPersonality ZOS_CPlusPlus;
+  static const EHPersonality GNU_BPF_CPlusPlus;
 
   /// Does this personality use landingpads or the family of pad instructions
   /// designed to form funclets?
@@ -63,6 +64,10 @@ struct EHPersonality {
   }
 
   bool isWasmPersonality() const { return this == &GNU_Wasm_CPlusPlus; }
+
+  /// A landing pad calls this personality itself, with the exception object,
+  /// as a Wasm catch does: the backend inserts the call.
+  bool isBPFPersonality() const { return this == &GNU_BPF_CPlusPlus; }
 
   bool isMSVCXXPersonality() const { return this == &MSVC_CxxFrameHandler3; }
 };
