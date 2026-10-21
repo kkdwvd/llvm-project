@@ -185,3 +185,8 @@ since a declaration with default visibility in a program does not link against
 the hidden definition in the library, and `cxxabi.h` must be in
 `include/<triple>/c++/v1` with the declarations the runtime is built with, as
 above.
+
+The runtimes caches `libc/cmake/caches/bpfel-unknown-none.cmake` and
+`bpfeb-unknown-none.cmake` configure all five runtimes this way, libc++abi's
+BPF port included: on BPF `cxxabi.h` also declares `__dynamic_cast`, and
+`__cxa_end_catch` is `noexcept`.
