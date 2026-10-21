@@ -89,7 +89,9 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::TRAP, MVT::Other, Custom);
 
-  setOperationAction({ISD::GlobalAddress, ISD::ConstantPool}, MVT::i64, Custom);
+  setOperationAction(
+      {ISD::GlobalAddress, ISD::GlobalTLSAddress, ISD::ConstantPool}, MVT::i64,
+      Custom);
   if (STI.hasGotox())
     setOperationAction({ISD::JumpTable, ISD::BlockAddress}, MVT::i64, Custom);
   // The action of an intrinsic is looked up with MVT::Other.
@@ -465,6 +467,8 @@ SDValue BPFTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     return LowerJumpTable(Op, DAG);
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
+  case ISD::GlobalTLSAddress:
+    return LowerGlobalTLSAddress(Op, DAG);
   case ISD::ConstantPool:
     return LowerConstantPool(Op, DAG);
   case ISD::BlockAddress:
@@ -666,6 +670,15 @@ Function *llvm::getOrCreateBPFLibcall(Module *M, StringRef Name) {
     // unsigned __int128 __udivti3(unsigned __int128 a, unsigned __int128 b)
     FT = FunctionType::get(I128, {I128, I128}, false);
     DITypes = {UInt128, UInt128, UInt128};
+  } else if (Name == "__emutls_get_address") {
+    // void *__emutls_get_address(struct __emutls_control *control), as
+    // compiler-rt's emutls.c defines it. The struct is declared, not
+    // described: libbpf takes a forward declaration for the struct of the
+    // same name in the definition's BTF.
+    FT = FunctionType::get(Ptr, {Ptr}, false);
+    DIType *Control = DB.createForwardDecl(
+        dwarf::DW_TAG_structure_type, "__emutls_control", nullptr, nullptr, 0);
+    DITypes = {VoidPtr, DB.createPointerType(Control, 64)};
   } else if (Name == RTLIB::RuntimeLibcallsInfo::getLibcallImplName(
                          RTLIB::impl__Unwind_GetBPFLPadContext)) {
     // struct _Unwind_LandingPadContext *_Unwind_GetBPFLPadContext(void), as
@@ -842,7 +855,7 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     if (!BPFAllowsLibcalls && Sym != BPF_TRAP && Sym != "__multi3" &&
         Sym != "__divti3" && Sym != "__modti3" && Sym != "__udivti3" &&
         Sym != "__umodti3" && Sym != "memcpy" && Sym != "memset" &&
-        Sym != "memmove")
+        Sym != "memmove" && Sym != "__emutls_get_address")
       fail(
           CLI.DL, DAG,
           Twine("A call to built-in function '" + Sym + "' is not supported."));
@@ -1339,6 +1352,22 @@ SDValue BPFTargetLowering::LowerGlobalAddress(SDValue Op,
 
   // Emit pseudo instruction
   return SDValue(DAG.getMachineNode(BPF::LDIMM64, DL, MVT::i64, Addr), 0);
+}
+
+// Thread-local storage is emulated, the default for the target: LowerEmuTLS
+// gave each variable its __emutls_v. control block, and an access is a call
+// of __emutls_get_address() with the block's address, as on the other targets
+// that emulate it. The runtime decides what a thread is. Nothing but the
+// emulated model has a lowering: a BPF program has no thread pointer.
+SDValue BPFTargetLowering::LowerGlobalTLSAddress(SDValue Op,
+                                                 SelectionDAG &DAG) const {
+  GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
+  if (DAG.getTarget().useEmulatedTLS())
+    return LowerToTLSEmulatedModel(N, DAG);
+
+  SDLoc DL(Op);
+  fail(DL, DAG, "thread-local storage is supported only as emulated TLS");
+  return LowerGlobalAddress(Op, DAG);
 }
 
 SDValue BPFTargetLowering::LowerConstantPool(SDValue Op,

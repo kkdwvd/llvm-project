@@ -2026,6 +2026,13 @@ void BTFDebug::processGlobals(bool ProcessingMapDef) {
   // Collect all types referenced by globals.
   const Module *M = MMI->getModule();
   for (const GlobalVariable &Global : M->globals()) {
+    // A thread-local variable under emulated TLS is never emitted, as the
+    // AsmPrinter leaves it out: its data is the __emutls_v. control block
+    // and __emutls_t. template that LowerEmuTLS made from it, globals
+    // without debug info that are described below as the bytes they are.
+    if (Global.isThreadLocal() && Asm->TM.useEmulatedTLS())
+      continue;
+
     // Decide the section name.
     StringRef SecName;
     std::optional<SectionKind> GVKind;
