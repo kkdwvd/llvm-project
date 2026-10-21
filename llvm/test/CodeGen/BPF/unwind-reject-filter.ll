@@ -1,8 +1,9 @@
 ; RUN: not llc -mtriple=bpfel -mcpu=v4 -filetype=asm -o - %s 2>&1 | FileCheck %s
 ; RUN: not llc -mtriple=bpfel -mcpu=v4 -enable-new-pm -filetype=asm -o - %s 2>&1 | FileCheck %s
 
-; A filter that lets some types through needs type information at run time.
-; The empty one is a catch-all and is accepted, see unwind.ll.
+; A filter with types, as clang emits for a dynamic exception specification,
+; which C++17 removed. The empty one is a catch-all and is accepted, see
+; unwind.ll and unwind-typed-catch-clauses.ll.
 
 @_ZTIi = external constant ptr
 
@@ -22,4 +23,4 @@ lpad:
   ret void
 }
 
-; CHECK: error: {{.*}} BPF does not support exception filters yet
+; CHECK: error: {{.*}} BPF does not support exception filters with types, as of a dynamic exception specification

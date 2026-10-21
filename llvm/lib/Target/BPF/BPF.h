@@ -37,7 +37,8 @@ public:
 };
 
 ModulePass *createBPFCheckAndAdjustIRLegacyPass();
-/// Make every call that may unwind an invoke. See BPFUnwind.cpp.
+/// Make every call that may unwind an invoke, and have every landing pad
+/// compute its selector. See BPFUnwind.cpp.
 class BPFUnwindPreparePass
     : public RequiredPassInfoMixin<BPFUnwindPreparePass> {
 public:
@@ -58,6 +59,11 @@ FunctionPass *createBPFUnwindLowerLegacyPass();
 /// Whether a call of \p Callee starts or carries on an unwind, which the
 /// backend lowers instead of making the call. See BPFUnwind.cpp.
 bool isBPFUnwindCallee(const GlobalValue &Callee, const TargetLowering &TLI);
+
+/// The function the backend calls as \p Name, declared with the debug info of
+/// its C prototype so that it has BTF, or null for a name the backend does
+/// not know. See BPFISelLowering.cpp.
+Function *getOrCreateBPFLibcall(Module *M, StringRef Name);
 
 class BPFISelDAGToDAGPass : public SelectionDAGISelPass {
 public:

@@ -640,6 +640,7 @@ def UNWIND_RESUME : RuntimeLibcall;
 def UNWIND_REGISTER : RuntimeLibcall;
 def UNWIND_UNREGISTER : RuntimeLibcall;
 def UNWIND_GET_WASM_LPAD_CONTEXT : RuntimeLibcall;
+def UNWIND_GET_BPF_LPAD_CONTEXT : RuntimeLibcall;
 def CXA_END_CLEANUP : RuntimeLibcall;
 
 // Note: there are two sets of atomics libcalls; see
@@ -1920,6 +1921,9 @@ defset list<RuntimeLibcallImpl> SjLjExceptionHandlingLibcalls = {
 
 // Only used on wasm
 def _Unwind_GetWasmLPadContext : RuntimeLibcallImpl<UNWIND_GET_WASM_LPAD_CONTEXT>;
+
+// Only used on BPF
+def _Unwind_GetBPFLPadContext : RuntimeLibcallImpl<UNWIND_GET_BPF_LPAD_CONTEXT>;
 
 // Used on OpenBSD
 def __stack_smash_handler : RuntimeLibcallImpl<STACK_SMASH_HANDLER>;
@@ -3822,12 +3826,28 @@ def WasmSystemLibrary
            ExceptionRuntime, WasmExceptionRuntime)>;
 
 //===----------------------------------------------------------------------===//
+// BPF Runtime Libcalls
+//===----------------------------------------------------------------------===//
+
+def isBPF : RuntimeLibcallAvailability<(all_of IsBPF)>;
+
+// The landing pad context a pad fills in before it calls the personality
+// routine, as a Wasm pad does: libunwind's Unwind-bpf.c defines it.
+def BPFExceptionRuntime : LibcallLibrary<"unwind",
+  (add _Unwind_GetBPFLPadContext), isBPF>;
+
+def BPFSystemLibrary
+    : SystemRuntimeLibrary<isBPF,
+      (add CompilerRtLibgcc, Libm, Libc, ExceptionRuntime, SafeStackRuntime,
+           BPFExceptionRuntime)>;
+
+//===----------------------------------------------------------------------===//
 // Legacy Default Runtime Libcalls
 //===----------------------------------------------------------------------===//
 
 // TODO: Should make every target explicit.
 def isDefaultLibcallArch : RuntimeLibcallAvailability<
-  (any_of IsMIPS, IsLoongArch, IsVE, IsBPF, IsArchCSKY, IsArchArc, IsArchM68k,
+  (any_of IsMIPS, IsLoongArch, IsVE, IsArchCSKY, IsArchArc, IsArchM68k,
           IsArchXtensa, (all_of IsSystemZ, (not IsOSzOS)))>;
 
 

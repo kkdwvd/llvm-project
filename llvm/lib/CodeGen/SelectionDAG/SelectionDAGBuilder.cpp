@@ -78,6 +78,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsAArch64.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
+#include "llvm/IR/IntrinsicsBPF.h"
 #include "llvm/IR/IntrinsicsWebAssembly.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MemoryModelRelaxationAnnotations.h"
@@ -8464,6 +8465,15 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     // MachineFunction in SelectionDAGISel::PrepareEHLandingPad. We can safely
     // delete it now.
     return;
+
+  case Intrinsic::bpf_landingpad_index: {
+    // The index of the landingpad this call sits in, for the index-keyed
+    // call-site table that EHStreamer emits for such a function, as
+    // wasm.landingpad.index gives a catchpad its index.
+    unsigned Index = cast<ConstantInt>(I.getArgOperand(0))->getZExtValue();
+    DAG.getMachineFunction().setWasmLandingPadIndex(FuncInfo.MBB, Index);
+    return;
+  }
 
   case Intrinsic::aarch64_settag:
   case Intrinsic::aarch64_settag_zero: {

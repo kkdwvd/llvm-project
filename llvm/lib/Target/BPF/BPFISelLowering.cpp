@@ -25,7 +25,10 @@
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/EHPersonalities.h"
+#include "llvm/IR/IntrinsicsBPF.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/RuntimeLibcalls.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -87,6 +90,8 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
   setOperationAction({ISD::GlobalAddress, ISD::ConstantPool}, MVT::i64, Custom);
   if (STI.hasGotox())
     setOperationAction({ISD::JumpTable, ISD::BlockAddress}, MVT::i64, Custom);
+  // The action of an intrinsic is looked up with MVT::Other.
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
 
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64, Custom);
   setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
@@ -383,6 +388,27 @@ SDValue BPFTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     return LowerATOMIC_FENCE(Op, DAG);
   case ISD::TRAP:
     return LowerTRAP(Op, DAG);
+  case ISD::INTRINSIC_WO_CHAIN:
+    return LowerINTRINSIC_WO_CHAIN(Op, DAG);
+  }
+}
+
+SDValue BPFTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
+                                                   SelectionDAG &DAG) const {
+  switch (Op.getConstantOperandVal(0)) {
+  default:
+    return SDValue();
+  case Intrinsic::bpf_lsda: {
+    // The function's exception table, by the name EHStreamer gives it, as
+    // wasm.lsda is lowered: a landing pad hands the personality routine the
+    // address (BPFUnwind.cpp).
+    MachineFunction &MF = DAG.getMachineFunction();
+    const char *SymName = MF.createExternalSymbolName(
+        "GCC_except_table" + std::to_string(MF.getFunctionNumber()));
+    SDValue Sym = DAG.getTargetExternalSymbol(SymName, MVT::i64);
+    return SDValue(
+        DAG.getMachineNode(BPF::LD_imm64, SDLoc(Op), MVT::i64, Sym), 0);
+  }
   }
 }
 
@@ -499,10 +525,12 @@ static uint32_t *regMaskFromTemplate(const TargetRegisterInfo *TRI,
 /// another object through BTF, and matches the prototypes, so the types are
 /// those of a definition in C, as compiler-rt or a libc writes one. Nothing in
 /// the IR names the function, so the backend declares it, as it declares
-/// __bpf_trap. A function the module has already, declared or defined, is
-/// taken as it is.
-static Function *getOrCreateLibcall(Module *M, StringRef Name) {
-  if (auto *Fn = M->getFunction(Name))
+/// __bpf_trap. A function the module defines is taken as it is, and so is a
+/// declaration that has debug info; a declaration without gets the
+/// prototype's.
+Function *llvm::getOrCreateBPFLibcall(Module *M, StringRef Name) {
+  Function *Fn = M->getFunction(Name);
+  if (Fn && (!Fn->isDeclaration() || Fn->getSubprogram()))
     return Fn;
 
   LLVMContext &C = M->getContext();
@@ -538,22 +566,39 @@ static Function *getOrCreateLibcall(Module *M, StringRef Name) {
     // unsigned __int128 __udivti3(unsigned __int128 a, unsigned __int128 b)
     FT = FunctionType::get(I128, {I128, I128}, false);
     DITypes = {UInt128, UInt128, UInt128};
+  } else if (Name == RTLIB::RuntimeLibcallsInfo::getLibcallImplName(
+                         RTLIB::impl__Unwind_GetBPFLPadContext)) {
+    // struct _Unwind_LandingPadContext *_Unwind_GetBPFLPadContext(void), as
+    // libunwind's Unwind-bpf.c defines it, the struct declared as above.
+    FT = FunctionType::get(Ptr, {}, false);
+    DIType *Context =
+        DB.createForwardDecl(dwarf::DW_TAG_structure_type,
+                             "_Unwind_LandingPadContext", nullptr, nullptr, 0);
+    DITypes = {DB.createPointerType(Context, 64)};
+  } else if (Name == getEHPersonalityName(EHPersonality::BPF_CXX)) {
+    // int __gxx_bpf_personality_v0(void *exception_object), as libc++abi
+    // defines the personality routine a landing pad calls (BPFUnwind.cpp),
+    // with the prototype the frontend declares every personality with.
+    FT = FunctionType::get(I32, {Ptr}, false);
+    DITypes = {Int, VoidPtr};
   } else {
     return nullptr;
   }
 
-  Function *NewF = Function::Create(FT, GlobalValue::ExternalLinkage, Name, M);
-  NewF->setDSOLocal(true);
+  if (!Fn) {
+    Fn = Function::Create(FT, GlobalValue::ExternalLinkage, Name, M);
+    Fn->setDSOLocal(true);
+  }
   if (M->debug_compile_units().empty())
-    return NewF;
+    return Fn;
 
   DISubroutineType *FuncType =
       DB.createSubroutineType(DB.getOrCreateTypeArray(DITypes));
   DICompileUnit *CU = *M->debug_compile_units_begin();
-  NewF->setSubprogram(DB.createFunction(CU, Name, Name, nullptr, 0, FuncType,
-                                        0, DINode::FlagPrototyped,
-                                        DISubprogram::SPFlagZero));
-  return NewF;
+  Fn->setSubprogram(DB.createFunction(CU, Name, Name, nullptr, 0, FuncType, 0,
+                                      DINode::FlagPrototyped,
+                                      DISubprogram::SPFlagZero));
+  return Fn;
 }
 
 SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
@@ -686,7 +731,8 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // A libcall is called as the function its C prototype declares, so that
     // it has BTF, which libbpf links the call to a definition in another
     // object through.
-    if (Function *F = getOrCreateLibcall(MF.getFunction().getParent(), Sym))
+    if (Function *F =
+            getOrCreateBPFLibcall(MF.getFunction().getParent(), Sym))
       Callee = DAG.getTargetGlobalAddress(F, CLI.DL, PtrVT, 0, 0);
     else
       Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, 0);

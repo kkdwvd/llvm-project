@@ -16,6 +16,12 @@ namespace llvm {
 class BPFTargetLoweringObjectFileELF : public TargetLoweringObjectFileELF {
 
 public:
+  void initialize(MCContext &Ctx, const TargetMachine &TM,
+                  const Module &M) override;
+
+  MCSection *getSectionForLSDA(const Function &F, const MCSymbol &FnSym,
+                               const TargetMachine &TM) const override;
+
   MCSection *
   getSectionForJumpTable(const Function &F, const TargetMachine &TM,
                          const MachineJumpTableEntry *JTE) const override;

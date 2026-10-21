@@ -35,7 +35,8 @@ enum class EHPersonality {
   Wasm_CXX,
   XL_CXX,
   ZOS_CXX,
-  Wasm_D
+  Wasm_D,
+  BPF_CXX
 };
 
 /// See if the given exception handling personality function is one
