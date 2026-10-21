@@ -4,6 +4,7 @@ set(files
     libunwind.modulemap
     mach-o/compact_unwind_encoding.h
     unwind_arm_ehabi.h
+    unwind_bpf.h
     unwind_itanium.h
     unwind.h
     )

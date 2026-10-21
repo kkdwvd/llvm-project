@@ -70,6 +70,19 @@ set(LIBUNWIND_SOURCES
     ${LIBUNWIND_C_SOURCES}
     ${LIBUNWIND_ASM_SOURCES})
 
+if (LLVM_DEFAULT_TARGET_TRIPLE MATCHES "^bpf")
+  # The kernel unwinds: the library is the landing pad context and the
+  # accessors of Unwind-bpf.c alone, as it is Unwind-wasm.c's for WebAssembly.
+  # The other sources would be empty objects, which libbpf's linker, wanting
+  # BTF in every object, refuses. C11, for _Thread_local, and -fexceptions as
+  # the C sources above, so that the call of an exception's cleanup through a
+  # pointer is one the kernel may unwind through, which the verifier asks of a
+  # call through a pointer whenever the program stores the address of a
+  # function that may unwind.
+  set(LIBUNWIND_SOURCES Unwind-bpf.c)
+  set_source_files_properties(Unwind-bpf.c PROPERTIES COMPILE_FLAGS "-std=c11 -fexceptions")
+endif()
+
 # Generate library list.
 if (NOT APPLE)
   add_library_flags_if(LIBUNWIND_HAS_DL_LIB dl)

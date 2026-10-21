@@ -187,6 +187,10 @@
 // Unused
 #define _LIBUNWIND_CONTEXT_SIZE 0
 #define _LIBUNWIND_CURSOR_SIZE 0
+#elif defined(__BPF__)
+// Unused: the kernel unwinds, see Unwind-bpf.c.
+#define _LIBUNWIND_CONTEXT_SIZE 0
+#define _LIBUNWIND_CURSOR_SIZE 0
 # else
 #  error "Unsupported architecture."
 # endif
