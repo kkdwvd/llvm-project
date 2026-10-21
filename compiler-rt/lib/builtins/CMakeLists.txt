@@ -1044,6 +1044,29 @@ set(wasm_SOURCES
 set(wasm32_SOURCES ${wasm_SOURCES})
 set(wasm64_SOURCES ${wasm_SOURCES})
 
+# BPF has no floating point, and its backend refuses to compile any, so the
+# library holds no float routines. The backend lowers every integer operation
+# inline, 64-bit division, shifts of 128-bit values and bit counting
+# included, except the 128-bit multiplication, division and remainder it
+# calls these for. BPF programs run under the kernel's verifier, which admits
+# a loop only when it can bound it, so a routine is a verifier question as
+# much as a compiler one: bpf/udivmodti4.c is the generic routine with its
+# loops bounded for the verifier, and the others have none. Thread-local
+# storage is emulated, as on the targets that default to it: emutls.c, with
+# its per-CPU backend, which the bare-metal build leaves out of the generic
+# sources.
+set(bpf_SOURCES
+  bpf/udivmodti4.c
+  divti3.c
+  emutls.c
+  modti3.c
+  multi3.c
+  udivti3.c
+  umodti3.c
+)
+set(bpfel_SOURCES ${bpf_SOURCES})
+set(bpfeb_SOURCES ${bpf_SOURCES})
+
 set(ve_SOURCES
   ve/grow_stack.S
   ve/grow_stack_align.S
@@ -1096,6 +1119,13 @@ else ()
     if(NOT COMPILER_RT_DEBUG)
       append_list_if(COMPILER_RT_HAS_OMIT_FRAME_POINTER_FLAG -fomit-frame-pointer BUILTIN_CFLAGS)
     endif()
+  endif()
+
+  # A BPF program runs in the kernel, with no C library but its platform's:
+  # the builtins are freestanding, as for a GPU, so that the compiler's own
+  # <stdint.h> is theirs and not the host's behind it.
+  if("${COMPILER_RT_DEFAULT_TARGET_ARCH}" MATCHES "bpf")
+    append_list_if(COMPILER_RT_HAS_FFREESTANDING_FLAG -ffreestanding BUILTIN_CFLAGS)
   endif()
 
   # Directly targeting the GPU requires a few extra flags.

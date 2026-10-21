@@ -7,8 +7,18 @@
 //===----------------------------------------------------------------------===//
 
 #include <stdint.h>
+#if defined(__BPF__)
+// The bare-metal builtins build has no C library headers: what the BPF
+// backend needs of the platform's C library is declared here.
+#include <stddef.h>
+void *malloc(size_t size);
+void free(void *ptr);
+void *memcpy(void *dst, const void *src, size_t n);
+void *memset(void *dst, int c, size_t n);
+#else
 #include <stdlib.h>
 #include <string.h>
+#endif
 
 #include "int_lib.h"
 
@@ -43,9 +53,70 @@ typedef struct emutls_address_array {
 #pragma warning(pop)
 #endif
 
+#if !defined(__BPF__)
 static void emutls_shutdown(emutls_address_array *array);
+#endif
 
 #ifndef _WIN32
+
+typedef unsigned int gcc_word __attribute__((mode(word)));
+typedef unsigned int gcc_pointer __attribute__((mode(pointer)));
+
+#if defined(__BPF__)
+
+// A BPF program runs in the kernel on every CPU at once, with no threads of
+// its own: what is per thread elsewhere is per CPU here, indexed by the
+// kernel's helper that names the CPU. This is where the C and C++ runtimes of
+// a program keep their per-invocation state, llvm-libc's errno and
+// libc++abi's __cxa_eh_globals, which are thread_local as on a hosted
+// target. The objects and the per-CPU arrays come from the
+// platform's malloc as on every target, and nothing frees them: a program
+// has no thread exit. There is no lock: an index is claimed with a compare
+// and exchange, and a CPU's array is touched on that CPU alone. What ends
+// the program is the kernel's bpf_throw(), which discards every frame and
+// returns its cookie from the program, called by name through the .ksyms
+// section as a program calls any kfunc: no libc abort() ends a BPF program.
+//
+// TODO(kkd): kernel limitation. Per CPU is not per invocation: an invocation
+// preempted or sleeping between two accesses of a variable can see the value
+// that another invocation on that CPU left in it, as it can see the runtimes'
+// per-CPU state. The fix is a slot in struct bpf_run_ctx that holds the
+// address of the invocation's state, for the program types that run with a
+// run context, with a kfunc that returns it: emutls_getspecific() and
+// emutls_setspecific() then read and set that slot, and program types
+// without a run context keep the per-CPU array. Nothing else here changes.
+
+// Helper 8 of the kernel's stable set, called by its number as
+// bpf_helper_defs.h calls it.
+static unsigned (*const emutls_bpf_cpu)(void) = (unsigned (*)(void))8;
+
+// Weak, as the kernel's headers declare every kfunc, so that an object that
+// never calls it loads on a kernel without it.
+extern void bpf_throw(uint64_t cookie)
+    __attribute__((weak, noreturn, section(".ksyms")));
+
+// As many CPUs as the kernel lays out for.
+#define EMUTLS_BPF_MAX_CPUS 4096
+static emutls_address_array *emutls_bpf_arrays[EMUTLS_BPF_MAX_CPUS];
+
+static __inline void emutls_abort(void) { bpf_throw(0); }
+
+static __inline emutls_address_array **emutls_bpf_slot(void) {
+  unsigned cpu = emutls_bpf_cpu();
+  if (cpu >= EMUTLS_BPF_MAX_CPUS)
+    emutls_abort();
+  return &emutls_bpf_arrays[cpu];
+}
+
+static __inline void emutls_setspecific(emutls_address_array *value) {
+  *emutls_bpf_slot() = value;
+}
+
+static __inline emutls_address_array *emutls_getspecific(void) {
+  return *emutls_bpf_slot();
+}
+
+#else // __BPF__
 
 #include <pthread.h>
 
@@ -55,8 +126,9 @@ static pthread_key_t emutls_pthread_key;
 static bool emutls_key_created = false;
 #endif
 
-typedef unsigned int gcc_word __attribute__((mode(word)));
-typedef unsigned int gcc_pointer __attribute__((mode(pointer)));
+static __inline void emutls_abort(void) { abort(); }
+
+#endif // __BPF__
 
 // Default is not to use posix_memalign, so systems like Android
 // can use thread local data without heavier POSIX memory allocators.
@@ -68,12 +140,12 @@ static __inline void *emutls_memalign_alloc(size_t align, size_t size) {
   void *base;
 #if EMUTLS_USE_POSIX_MEMALIGN
   if (posix_memalign(&base, align, size) != 0)
-    abort();
+    emutls_abort();
 #else
 #define EXTRA_ALIGN_PTR_BYTES (align - 1 + sizeof(void *))
   char *object;
   if ((object = (char *)malloc(EXTRA_ALIGN_PTR_BYTES + size)) == NULL)
-    abort();
+    emutls_abort();
   base = (void *)(((uintptr_t)(object + EXTRA_ALIGN_PTR_BYTES)) &
                   ~(uintptr_t)(align - 1));
 
@@ -81,6 +153,8 @@ static __inline void *emutls_memalign_alloc(size_t align, size_t size) {
 #endif
   return base;
 }
+
+#if !defined(__BPF__)
 
 static __inline void emutls_memalign_free(void *base) {
 #if EMUTLS_USE_POSIX_MEMALIGN
@@ -133,6 +207,8 @@ static __inline void emutls_lock(void) { pthread_mutex_lock(&emutls_mutex); }
 
 static __inline void emutls_unlock(void) { pthread_mutex_unlock(&emutls_mutex); }
 
+#endif // !__BPF__
+
 #else // _WIN32
 
 #include <assert.h>
@@ -146,6 +222,8 @@ static DWORD emutls_tls_index = TLS_OUT_OF_INDEXES;
 
 typedef uintptr_t gcc_word;
 typedef void *gcc_pointer;
+
+static __inline void emutls_abort(void) { abort(); }
 
 static void win_error(DWORD last_err, const char *hint) {
   char *buffer = NULL;
@@ -261,6 +339,7 @@ static __inline void __atomic_store_n(void *ptr, uintptr_t val, unsigned type) {
 
 static size_t emutls_num_object = 0; // number of allocated TLS objects
 
+#if !defined(__BPF__)
 // Free the allocated TLS data
 static void emutls_shutdown(emutls_address_array *array) {
   if (array) {
@@ -271,6 +350,7 @@ static void emutls_shutdown(emutls_address_array *array) {
     }
   }
 }
+#endif
 
 // For every TLS variable xyz,
 // there is one __emutls_control variable named __emutls_v.xyz.
@@ -303,7 +383,7 @@ static __inline void *emutls_allocate_object(__emutls_control *control) {
     align = sizeof(void *);
   // Make sure that align is power of 2.
   if ((align & (align - 1)) != 0)
-    abort();
+    emutls_abort();
 
   base = emutls_memalign_alloc(align, size);
   if (control->value)
@@ -314,6 +394,22 @@ static __inline void *emutls_allocate_object(__emutls_control *control) {
 }
 
 // Returns control->object.index; set index if not allocated yet.
+#if defined(__BPF__)
+// Without a lock: the next number, published with a compare and exchange, so
+// that two CPUs claiming one for the same variable at once agree on the one
+// published first and waste the other.
+static __inline uintptr_t emutls_get_index(__emutls_control *control) {
+  uintptr_t index = __atomic_load_n(&control->object.index, __ATOMIC_ACQUIRE);
+  if (!index) {
+    uintptr_t expected = 0;
+    index = __atomic_add_fetch(&emutls_num_object, 1, __ATOMIC_RELAXED);
+    if (!__atomic_compare_exchange_n(&control->object.index, &expected, index,
+                                     false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+      index = expected;
+  }
+  return index;
+}
+#else
 static __inline uintptr_t emutls_get_index(__emutls_control *control) {
   uintptr_t index = __atomic_load_n(&control->object.index, __ATOMIC_ACQUIRE);
   if (!index) {
@@ -328,12 +424,13 @@ static __inline uintptr_t emutls_get_index(__emutls_control *control) {
   }
   return index;
 }
+#endif
 
 // Updates newly allocated thread local emutls_address_array.
 static __inline void emutls_check_array_set_size(emutls_address_array *array,
                                                  uintptr_t size) {
   if (array == NULL)
-    abort();
+    emutls_abort();
   array->size = size;
   emutls_setspecific(array);
 }
@@ -356,6 +453,29 @@ static __inline uintptr_t emutls_asize(uintptr_t N) {
 
 // Returns the thread local emutls_address_array.
 // Extends its size if necessary to hold address at index.
+#if defined(__BPF__)
+// Grown into a new allocation, with no realloc to lean on, and never freed.
+static __inline emutls_address_array *
+emutls_get_address_array(uintptr_t index) {
+  emutls_address_array *array = emutls_getspecific();
+  if (array != NULL && index <= array->size)
+    return array;
+  uintptr_t orig_size = array != NULL ? array->size : 0;
+  uintptr_t new_size = emutls_new_data_array_size(index);
+  emutls_address_array *grown =
+      (emutls_address_array *)malloc(emutls_asize(new_size));
+  if (grown == NULL)
+    emutls_abort();
+  memset(grown->data, 0, new_size * sizeof(void *));
+  if (array != NULL) {
+    memcpy(grown->data, array->data, orig_size * sizeof(void *));
+    free(array);
+  }
+  grown->skip_destructor_rounds = 0;
+  emutls_check_array_set_size(grown, new_size);
+  return grown;
+}
+#else
 static __inline emutls_address_array *
 emutls_get_address_array(uintptr_t index) {
   emutls_address_array *array = emutls_getspecific();
@@ -378,7 +498,34 @@ emutls_get_address_array(uintptr_t index) {
   }
   return array;
 }
+#endif
 
+// The object of control on this thread, allocated on its first use.
+static __inline void *emutls_get_object(__emutls_control *control) {
+  uintptr_t index = emutls_get_index(control);
+  emutls_address_array *array = emutls_get_address_array(index--);
+  if (array->data[index] == NULL)
+    array->data[index] = emutls_allocate_object(control);
+  return array->data[index];
+}
+
+#if defined(__BPF__)
+// The kernel's verifier checks a static subprogram again at every call, with
+// what the caller passes, and a global subprogram once, on its own, against
+// its BTF prototype, whose parameters and result must then be integers or
+// pointers to kernel types. The work is a global subprogram taking and
+// returning the numbers the addresses are, checked once per program, behind
+// the entry point the compiler calls, which is hidden as every function of
+// the library is: the pattern of libc++abi's walks on BPF.
+__attribute__((visibility("default"), noinline)) uintptr_t
+__emutls_bpf_get_address(uintptr_t control) {
+  return (uintptr_t)emutls_get_object((__emutls_control *)control);
+}
+
+void *__emutls_get_address(__emutls_control *control) {
+  return (void *)__emutls_bpf_get_address((uintptr_t)control);
+}
+#else
 #ifndef _WIN32
 // Our emulated TLS implementation relies on local state (e.g. for the pthread
 // key), and if we duplicate this state across different shared libraries,
@@ -395,12 +542,9 @@ emutls_get_address_array(uintptr_t index) {
 __attribute__((visibility("default"), weak))
 #endif
 void *__emutls_get_address(__emutls_control *control) {
-  uintptr_t index = emutls_get_index(control);
-  emutls_address_array *array = emutls_get_address_array(index--);
-  if (array->data[index] == NULL)
-    array->data[index] = emutls_allocate_object(control);
-  return array->data[index];
+  return emutls_get_object(control);
 }
+#endif
 
 #ifdef __BIONIC__
 // Called by Bionic on dlclose to delete the emutls pthread key.
