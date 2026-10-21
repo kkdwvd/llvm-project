@@ -41,10 +41,14 @@ The layout, with `<triple>` one of the two above:
 <sysroot>/include/c++/v1/              libc++'s headers, if shared between
                                        the targets
 <sysroot>/include/                     C headers shared between the targets
-<sysroot>/lib/<triple>/                libc++.a, libc++abi.a and the archives
-                                       -l names
+<sysroot>/lib/<triple>/                libc.a, libc++.a, libc++abi.a,
+                                       libunwind.a and the archives -l
+                                       names, and compiler-rt's
+                                       libclang_rt.builtins.a when the
+                                       runtimes were built into the sysroot
 <resource>/lib/<triple>/               compiler-rt's libclang_rt.builtins.a,
-                                       in the compiler's resource directory
+                                       in the compiler's resource directory,
+                                       which comes first
 ```
 
 With a sysroot the compiler takes no header from the host: the frontend's own
@@ -133,26 +137,39 @@ then the sysroot's `lib/<triple>`, then the resource directory's, passed by
 its path in its place among the inputs; one found nowhere is passed as
 `lib<name>.a` for bpftool to report.
 
-With a sysroot the default libraries follow the inputs: `libc++.a` and
-`libc++abi.a` from the sysroot when the driver is `clang++`, then
-compiler-rt's builtins from the resource directory. `-nostdlib++` leaves the
-first two out, `-nostdlib` and `-nodefaultlibs` all of them. Without a sysroot
-nothing is linked but what was named.
+With a sysroot the default libraries follow the inputs, in the order they
+depend on each other, since libbpf links a member of an archive for the
+references before the archive only, as ld does: `libc++.a`, `libc++abi.a` and
+`libunwind.a` from the sysroot's `lib/<triple>` when the driver is `clang++`,
+then compiler-rt's builtins, `libclang_rt.builtins.a` from the resource
+directory's `lib/<triple>` or, when that has none, the sysroot's, `libc.a`
+from the sysroot's, and the builtins once more, since the two call each
+other: libc the 128-bit division, the builtins `malloc` and `memcpy` for
+emulated TLS. That is GCC's link sequence, libgcc, libc, libgcc, and the GNU
+driver's, which lists the runtime libraries around `-lc`. `-nostdlib++`
+leaves out the first three, `-nolibc` libc and the builtins' second copy,
+`-nostdlib` and `-nodefaultlibs` all of them. Without a sysroot nothing is
+linked but what was named. `-print-libgcc-file-name` prints the builtins the
+link would take.
 
 ## Building the sysroot
 
 The runtimes build produces the layout. For each target, configure
-compiler-rt's builtins, libc++ and libc++abi with
+compiler-rt's builtins, a libc, libunwind, libc++ and libc++abi with
 `-DLLVM_DEFAULT_TARGET_TRIPLE=bpfel-unknown-none` (or `bpfeb`),
 `-DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON` and
 `-DCMAKE_INSTALL_PREFIX=<sysroot>`: libc++'s headers then install to
 `include/c++/v1` with their `__config_site` in `include/<triple>/c++/v1`, or
-all of them to the latter with `LIBCXX_INSTALL_INCLUDE_DIR`, and the archives
-to `lib/<triple>`. The builtins install to the compiler's resource directory,
-`lib/<triple>/libclang_rt.builtins.a` under it, which is where the driver
-looks (`-print-libgcc-file-name` prints the path). The target's C headers,
-the kernel's UAPI headers among them if the sysroot is to replace the host's
-`<linux/*.h>`, go to `include/<triple>`.
+all of them to the latter with `LIBCXX_INSTALL_INCLUDE_DIR`, and the archives,
+the builtins' `libclang_rt.builtins.a` among them, to `lib/<triple>`, where
+the driver finds the builtins when the compiler's own resource directory has
+none for the target, so that a sysroot built apart from the compiler carries
+everything a link needs. When the prefix is the compiler's own installation,
+`-DCOMPILER_RT_INSTALL_PATH=<prefix>/lib/clang/<major>` puts the builtins in
+its resource directory instead, `lib/<triple>/libclang_rt.builtins.a` under
+it, as the runtimes of every target are installed there; the driver takes
+those first. The target's C headers, the kernel's UAPI headers among them if
+the sysroot is to replace the host's `<linux/*.h>`, go to `include/<triple>`.
 
 Two things the runtimes must get right for libbpf, which links by BTF and
 visibility rather than by symbol name alone: libc++'s `__config_site` should

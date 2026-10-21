@@ -82,23 +82,32 @@
 // RUN:   | FileCheck --check-prefix=STDLIB %s
 // STDLIB: error: invalid library name in argument '-stdlib=libstdc++'
 
-// A C++ link adds libc++ and libc++abi from the sysroot's lib/<triple> after
-// the inputs and before compiler-rt's builtins; -nostdlib++ leaves the two
-// out and -nostdlib all of them.
+// A C++ link adds libc++, libc++abi and libunwind from the sysroot's
+// lib/<triple> after the inputs, before compiler-rt's builtins, libc and the
+// builtins again, the order the libraries depend on each other, which
+// libbpf's linker wants as ld does; -nostdlib++ leaves the three out, -nolibc
+// libc, and -nostdlib all of them.
 
 // RUN: %clangxx -### --target=bpfel %s -o out.o 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK %s
 // LINK: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
-// LINK: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "[[ROOT:[^"]+]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++abi.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+// LINK: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "[[ROOT:[^"]+]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++abi.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libunwind.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
 
 // RUN: %clangxx -### --target=bpfel %s -o out.o -nostdlib++ 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK_NOSTDLIBXX %s
 // LINK_NOSTDLIBXX: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
-// LINK_NOSTDLIBXX: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+// LINK_NOSTDLIBXX: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a" "{{.*}}/share/bpf-sysroot/lib/bpfel-unknown-none/libc.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+
+// RUN: %clangxx -### --target=bpfel %s -o out.o -nolibc 2>&1 \
+// RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
+// RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
+// RUN:   | FileCheck --check-prefix=LINK_NOLIBC %s
+// LINK_NOLIBC: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
+// LINK_NOLIBC: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "[[ROOT:[^"]+]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libc++abi.a" "[[ROOT]]/share/bpf-sysroot/lib/bpfel-unknown-none/libunwind.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
 
 // RUN: %clangxx -### --target=bpfel %s -o out.o -nostdlib 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
