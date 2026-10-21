@@ -3335,6 +3335,23 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
 
     llvm::BasicBlock *Entry = llvm::BasicBlock::Create(Context, "", Wrapper);
     CGBuilderTy Builder(CGM, Entry);
+
+    // The wrapper is an artificial function like the others CodeGen makes
+    // up, described as they are, with its prototype: a pointer to the
+    // variable, taking nothing. Its instructions get the artificial
+    // location.
+    CGDebugInfo *DI = CGM.getModuleDebugInfo();
+    if (DI) {
+      QualType RetQT = VD->getType().getNonReferenceType();
+      QualType FnType =
+          getContext().getFunctionType(getContext().getPointerType(RetQT), {},
+                                       FunctionProtoType::ExtProtoInfo());
+      DI->emitFunctionStart(GlobalDecl(), SourceLocation(), SourceLocation(),
+                            FnType, Wrapper, /*CurFuncIsThunk=*/false);
+      Builder.SetCurrentDebugLocation(
+          llvm::DILocation::get(Context, 0, 0, Wrapper->getSubprogram()));
+    }
+
     if (HasConstantInitialization) {
       // No dynamic initialization to invoke.
     } else if (InitIsInitFunc) {
@@ -3381,6 +3398,9 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
     Val = Builder.CreateAddrSpaceCast(Val, Wrapper->getReturnType());
 
     Builder.CreateRet(Val);
+
+    if (DI)
+      DI->EmitFunctionEnd(Builder, Wrapper);
   }
 }
 
