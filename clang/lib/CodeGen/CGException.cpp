@@ -105,7 +105,8 @@ static llvm::FunctionCallee getPersonalityFn(CodeGenModule &CGM,
                                              const EHPersonality &Personality) {
   llvm::FunctionType *FTy;
 
-  if (Personality.isWasmPersonality()) {
+  // A personality a landing pad calls itself takes the exception object.
+  if (Personality.isWasmPersonality() || Personality.isBPFPersonality()) {
     FTy = llvm::FunctionType::get(CGM.Int32Ty, {CGM.VoidPtrTy}, false);
   } else {
     FTy = llvm::FunctionType::get(CGM.Int32Ty, true);
