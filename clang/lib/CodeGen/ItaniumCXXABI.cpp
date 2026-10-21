@@ -4868,6 +4868,22 @@ static llvm::FunctionCallee getClangCallTerminateFn(CodeGenModule &CGM) {
         llvm::BasicBlock::Create(CGM.getLLVMContext(), "", fn);
     CGBuilderTy builder(CGM, entry);
 
+    // Describe the function as the artificial one it is, as the other
+    // functions CodeGen makes up are described, so that a debugger names
+    // its frame and a target that links through debug info, as BPF does
+    // through BTF, has it. Its instructions get the artificial location:
+    // the subprogram's scope and no line.
+    CGDebugInfo *DI = CGM.getModuleDebugInfo();
+    if (DI) {
+      QualType fnType =
+          C.getFunctionType(C.VoidTy, {C.getPointerType(C.CharTy)},
+                            FunctionProtoType::ExtProtoInfo());
+      DI->emitFunctionStart(GlobalDecl(), SourceLocation(), SourceLocation(),
+                            fnType, fn, /*CurFuncIsThunk=*/false);
+      builder.SetCurrentDebugLocation(llvm::DILocation::get(
+          CGM.getLLVMContext(), 0, 0, fn->getSubprogram()));
+    }
+
     // Pull the exception pointer out of the parameter list.
     llvm::Value *exn = &*fn->arg_begin();
 
@@ -4884,6 +4900,9 @@ static llvm::FunctionCallee getClangCallTerminateFn(CodeGenModule &CGM) {
 
     // std::terminate cannot return.
     builder.CreateUnreachable();
+
+    if (DI)
+      DI->EmitFunctionEnd(builder, fn);
   }
   return fnRef;
 }
