@@ -338,8 +338,10 @@ if (LIBCXXABI_ENABLE_ASSERTIONS)
     list(APPEND LIBCXXABI_COMPILE_FLAGS -UNDEBUG)
   endif()
 else()
+  # As a compile option of the directory, which follows the -UNDEBUG that
+  # LLVM_ENABLE_ASSERTIONS adds as one, so that this option decides.
   if (NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "RELEASE")
-    list(APPEND LIBCXXABI_COMPILE_FLAGS -DNDEBUG)
+    add_compile_options(-DNDEBUG)
   endif()
 endif()
 
