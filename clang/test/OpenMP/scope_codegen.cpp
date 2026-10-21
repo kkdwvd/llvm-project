@@ -1668,27 +1668,27 @@ int main() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] {
-// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]]
-// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]]
-// CHECK5-NEXT:    unreachable
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] !dbg [[DBG59:![0-9]+]] {
+// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]], !dbg [[DBG60:![0-9]+]]
+// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]], !dbg [[DBG60]]
+// CHECK5-NEXT:    unreachable, !dbg [[DBG60]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN3SSTIdEC2Ev
-// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(8) [[THIS:%.*]]) unnamed_addr #[[ATTR2]] align 2 !dbg [[DBG59:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(8) [[THIS:%.*]]) unnamed_addr #[[ATTR2]] align 2 !dbg [[DBG61:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
-// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[STRUCT_SST:%.*]], ptr [[THIS1]], i32 0, i32 0, !dbg [[DBG60:![0-9]+]]
-// CHECK5-NEXT:    store double 0.000000e+00, ptr [[A]], align 8, !dbg [[DBG60]]
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr @omp_cgroup_mem_alloc, align 8, !dbg [[DBG61:![0-9]+]]
-// CHECK5-NEXT:    call void @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70(ptr [[THIS1]], ptr [[TMP0]], ptr null) #[[ATTR3]], !dbg [[DBG61]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG62:![0-9]+]]
+// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[STRUCT_SST:%.*]], ptr [[THIS1]], i32 0, i32 0, !dbg [[DBG62:![0-9]+]]
+// CHECK5-NEXT:    store double 0.000000e+00, ptr [[A]], align 8, !dbg [[DBG62]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr @omp_cgroup_mem_alloc, align 8, !dbg [[DBG63:![0-9]+]]
+// CHECK5-NEXT:    call void @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70(ptr [[THIS1]], ptr [[TMP0]], ptr null) #[[ATTR3]], !dbg [[DBG63]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG64:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70
-// CHECK5-SAME: (ptr noundef [[THIS:%.*]], ptr noundef [[OMP_CGROUP_MEM_ALLOC:%.*]], ptr noalias noundef [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] !dbg [[DBG63:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[THIS:%.*]], ptr noundef [[OMP_CGROUP_MEM_ALLOC:%.*]], ptr noalias noundef [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] !dbg [[DBG65:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[OMP_CGROUP_MEM_ALLOC_ADDR:%.*]] = alloca ptr, align 8
@@ -1696,14 +1696,14 @@ int main() {
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[OMP_CGROUP_MEM_ALLOC]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG64:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG64]]
-// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_teams(ptr @[[GLOB10:[0-9]+]], i32 2, ptr @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined, ptr [[TMP0]], ptr [[TMP1]]), !dbg [[DBG64]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG65:![0-9]+]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG66:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG66]]
+// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_teams(ptr @[[GLOB10:[0-9]+]], i32 2, ptr @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined, ptr [[TMP0]], ptr [[TMP1]]), !dbg [[DBG66]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG67:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef [[OMP_CGROUP_MEM_ALLOC:%.*]]) #[[ATTR8]] !dbg [[DBG66:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef [[OMP_CGROUP_MEM_ALLOC:%.*]]) #[[ATTR8]] !dbg [[DBG68:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1715,19 +1715,19 @@ int main() {
 // CHECK5-NEXT:    store ptr [[DOTBOUND_TID_]], ptr [[DOTBOUND_TID__ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[OMP_CGROUP_MEM_ALLOC]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG67:![0-9]+]]
-// CHECK5-NEXT:    [[A1:%.*]] = getelementptr inbounds nuw [[STRUCT_SST:%.*]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG68:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[A1]], ptr [[A]], align 8, !dbg [[DBG68]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[A]], align 8, !dbg [[DBG68]], !nonnull [[META7:![0-9]+]], !align [[META69:![0-9]+]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = load double, ptr [[TMP1]], align 8, !dbg [[DBG70:![0-9]+]]
-// CHECK5-NEXT:    store double [[TMP2]], ptr [[A_CASTED]], align 8, !dbg [[DBG70]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = load i64, ptr [[A_CASTED]], align 8, !dbg [[DBG70]]
-// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB8:[0-9]+]], i32 3, ptr @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined.omp_outlined, ptr [[TMP0]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], i64 [[TMP3]]), !dbg [[DBG70]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG71:![0-9]+]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG69:![0-9]+]]
+// CHECK5-NEXT:    [[A1:%.*]] = getelementptr inbounds nuw [[STRUCT_SST:%.*]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG70:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[A1]], ptr [[A]], align 8, !dbg [[DBG70]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[A]], align 8, !dbg [[DBG70]], !nonnull [[META7:![0-9]+]], !align [[META71:![0-9]+]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = load double, ptr [[TMP1]], align 8, !dbg [[DBG72:![0-9]+]]
+// CHECK5-NEXT:    store double [[TMP2]], ptr [[A_CASTED]], align 8, !dbg [[DBG72]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = load i64, ptr [[A_CASTED]], align 8, !dbg [[DBG72]]
+// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB8:[0-9]+]], i32 3, ptr @{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined.omp_outlined, ptr [[TMP0]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], i64 [[TMP3]]), !dbg [[DBG72]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG73:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__ZN3SSTIdEC1Ev_l70.omp_outlined.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr nofreeobj noundef nonnull align 8 dereferenceable(8) [[OMP_CGROUP_MEM_ALLOC:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 !dbg [[DBG72:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr nofreeobj noundef nonnull align 8 dereferenceable(8) [[OMP_CGROUP_MEM_ALLOC:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 !dbg [[DBG74:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1743,34 +1743,34 @@ int main() {
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[OMP_CGROUP_MEM_ALLOC]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8
 // CHECK5-NEXT:    store i64 [[A]], ptr [[A_ADDR]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG73:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG73]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    store ptr [[A_ADDR]], ptr [[TMP]], align 8, !dbg [[DBG73]]
-// CHECK5-NEXT:    store ptr [[A1]], ptr [[_TMP2]], align 8, !dbg [[DBG74:![0-9]+]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG75:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[TMP0]], ptr [[TMP2]], align 8, !dbg [[DBG75]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG75]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[_TMP2]], align 8, !dbg [[DBG76:![0-9]+]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    store ptr [[TMP4]], ptr [[TMP3]], align 8, !dbg [[DBG75]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG75]]
-// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP5]], align 8, !dbg [[DBG75]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG75:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG75]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    store ptr [[A_ADDR]], ptr [[TMP]], align 8, !dbg [[DBG75]]
+// CHECK5-NEXT:    store ptr [[A1]], ptr [[_TMP2]], align 8, !dbg [[DBG76:![0-9]+]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG77:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[TMP0]], ptr [[TMP2]], align 8, !dbg [[DBG77]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG77]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[_TMP2]], align 8, !dbg [[DBG78:![0-9]+]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    store ptr [[TMP4]], ptr [[TMP3]], align 8, !dbg [[DBG77]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG77]]
+// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP5]], align 8, !dbg [[DBG77]]
 // CHECK5-NEXT:    invoke void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(24) [[REF_TMP]])
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG75]]
+// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG77]]
 // CHECK5:       invoke.cont:
-// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG77:![0-9]+]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = load i32, ptr [[TMP6]], align 4, !dbg [[DBG77]]
-// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB6:[0-9]+]], i32 [[TMP7]]), !dbg [[DBG77]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG77]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG79:![0-9]+]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = load i32, ptr [[TMP6]], align 4, !dbg [[DBG79]]
+// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB6:[0-9]+]], i32 [[TMP7]]), !dbg [[DBG79]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG79]]
 // CHECK5:       terminate.lpad:
 // CHECK5-NEXT:    [[TMP8:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG75]]
-// CHECK5-NEXT:    [[TMP9:%.*]] = extractvalue { ptr, i32 } [[TMP8]], 0, !dbg [[DBG75]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP9]]) #[[ATTR11]], !dbg [[DBG75]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG75]]
+// CHECK5-NEXT:            catch ptr null, !dbg [[DBG77]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = extractvalue { ptr, i32 } [[TMP8]], 0, !dbg [[DBG77]]
+// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP9]]) #[[ATTR11]], !dbg [[DBG77]]
+// CHECK5-NEXT:    unreachable, !dbg [[DBG77]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN3SSTIdEC1EvENKUlvE_clEv
-// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]]) #[[ATTR1]] align 2 !dbg [[DBG78:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]]) #[[ATTR1]] align 2 !dbg [[DBG80:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[REF_TMP:%.*]] = alloca [[CLASS_ANON_0:%.*]], align 8
@@ -1778,22 +1778,22 @@ int main() {
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    [[TMP0:%.*]] = getelementptr inbounds nuw [[CLASS_ANON:%.*]], ptr [[THIS1]], i32 0, i32 0
 // CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[TMP0]], align 8
-// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG79:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP2]], align 8, !dbg [[DBG79]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG79]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG80:![0-9]+]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP4]], align 8, !dbg [[DBG80]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[TMP3]], align 8, !dbg [[DBG79]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG79]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG80]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[TMP7]], align 8, !dbg [[DBG80]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    store ptr [[TMP8]], ptr [[TMP6]], align 8, !dbg [[DBG79]]
-// CHECK5-NEXT:    call void @_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(24) [[REF_TMP]]), !dbg [[DBG79]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG81:![0-9]+]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG81:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP2]], align 8, !dbg [[DBG81]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG81]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG82:![0-9]+]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP4]], align 8, !dbg [[DBG82]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[TMP3]], align 8, !dbg [[DBG81]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG81]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG82]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[TMP7]], align 8, !dbg [[DBG82]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    store ptr [[TMP8]], ptr [[TMP6]], align 8, !dbg [[DBG81]]
+// CHECK5-NEXT:    call void @_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(24) [[REF_TMP]]), !dbg [[DBG81]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG83:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv
-// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]]) #[[ATTR2]] align 2 !dbg [[DBG84:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]]) #[[ATTR2]] align 2 !dbg [[DBG86:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[C:%.*]] = alloca i32, align 4
@@ -1802,24 +1802,24 @@ int main() {
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    [[TMP0:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0:%.*]], ptr [[THIS1]], i32 0, i32 0
 // CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[TMP0]], align 8
-// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG85:![0-9]+]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[TMP2]], align 8, !dbg [[DBG85]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = load double, ptr [[TMP3]], align 8, !dbg [[DBG86:![0-9]+]]
-// CHECK5-NEXT:    [[INC:%.*]] = fadd double [[TMP4]], 1.000000e+00, !dbg [[DBG86]]
-// CHECK5-NEXT:    store double [[INC]], ptr [[TMP3]], align 8, !dbg [[DBG86]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG87:![0-9]+]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[TMP5]], align 8, !dbg [[DBG87]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG88:![0-9]+]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[TMP7]], align 8, !dbg [[DBG88]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    [[TMP9:%.*]] = load double, ptr [[TMP8]], align 8, !dbg [[DBG89:![0-9]+]]
-// CHECK5-NEXT:    store double [[TMP9]], ptr [[A_CASTED]], align 8, !dbg [[DBG89]]
-// CHECK5-NEXT:    [[TMP10:%.*]] = load i64, ptr [[A_CASTED]], align 8, !dbg [[DBG89]]
-// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB14:[0-9]+]], i32 3, ptr @_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined, ptr [[TMP1]], ptr [[TMP6]], i64 [[TMP10]]), !dbg [[DBG89]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG90:![0-9]+]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG87:![0-9]+]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[TMP2]], align 8, !dbg [[DBG87]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = load double, ptr [[TMP3]], align 8, !dbg [[DBG88:![0-9]+]]
+// CHECK5-NEXT:    [[INC:%.*]] = fadd double [[TMP4]], 1.000000e+00, !dbg [[DBG88]]
+// CHECK5-NEXT:    store double [[INC]], ptr [[TMP3]], align 8, !dbg [[DBG88]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG89:![0-9]+]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[TMP5]], align 8, !dbg [[DBG89]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_0]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG90:![0-9]+]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[TMP7]], align 8, !dbg [[DBG90]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = load double, ptr [[TMP8]], align 8, !dbg [[DBG91:![0-9]+]]
+// CHECK5-NEXT:    store double [[TMP9]], ptr [[A_CASTED]], align 8, !dbg [[DBG91]]
+// CHECK5-NEXT:    [[TMP10:%.*]] = load i64, ptr [[A_CASTED]], align 8, !dbg [[DBG91]]
+// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB14:[0-9]+]], i32 3, ptr @_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined, ptr [[TMP1]], ptr [[TMP6]], i64 [[TMP10]]), !dbg [[DBG91]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG92:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef nonnull align 8 dereferenceable(8) [[OMP_CGROUP_MEM_ALLOC:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] !dbg [[DBG91:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef nonnull align 8 dereferenceable(8) [[OMP_CGROUP_MEM_ALLOC:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] !dbg [[DBG93:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1833,26 +1833,26 @@ int main() {
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[OMP_CGROUP_MEM_ALLOC]], ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8
 // CHECK5-NEXT:    store i64 [[A]], ptr [[A_ADDR]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG92:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG92]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    store ptr [[A_ADDR]], ptr [[TMP]], align 8, !dbg [[DBG92]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG93:![0-9]+]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = load i32, ptr [[TMP2]], align 4, !dbg [[DBG93]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP1]], align 8, !dbg [[DBG94:![0-9]+]]
-// CHECK5-NEXT:    [[DOTA__VOID_ADDR:%.*]] = call ptr @__kmpc_alloc(i32 [[TMP3]], i64 8, ptr [[TMP4]]), !dbg [[DBG93]]
-// CHECK5-NEXT:    store ptr [[DOTA__VOID_ADDR]], ptr [[_TMP1]], align 8, !dbg [[DBG93]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[_TMP1]], align 8, !dbg [[DBG95:![0-9]+]], !nonnull [[META7]], !align [[META69]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = load double, ptr [[TMP5]], align 8, !dbg [[DBG96:![0-9]+]]
-// CHECK5-NEXT:    [[INC:%.*]] = fadd double [[TMP6]], 1.000000e+00, !dbg [[DBG96]]
-// CHECK5-NEXT:    store double [[INC]], ptr [[TMP5]], align 8, !dbg [[DBG96]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP1]], align 8, !dbg [[DBG94]]
-// CHECK5-NEXT:    call void @__kmpc_free(i32 [[TMP3]], ptr [[DOTA__VOID_ADDR]], ptr [[TMP7]]), !dbg [[DBG96]]
-// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB12:[0-9]+]], i32 [[TMP3]]), !dbg [[DBG97:![0-9]+]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG97]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG94:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[OMP_CGROUP_MEM_ALLOC_ADDR]], align 8, !dbg [[DBG94]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    store ptr [[A_ADDR]], ptr [[TMP]], align 8, !dbg [[DBG94]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG95:![0-9]+]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = load i32, ptr [[TMP2]], align 4, !dbg [[DBG95]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP1]], align 8, !dbg [[DBG96:![0-9]+]]
+// CHECK5-NEXT:    [[DOTA__VOID_ADDR:%.*]] = call ptr @__kmpc_alloc(i32 [[TMP3]], i64 8, ptr [[TMP4]]), !dbg [[DBG95]]
+// CHECK5-NEXT:    store ptr [[DOTA__VOID_ADDR]], ptr [[_TMP1]], align 8, !dbg [[DBG95]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[_TMP1]], align 8, !dbg [[DBG97:![0-9]+]], !nonnull [[META7]], !align [[META71]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = load double, ptr [[TMP5]], align 8, !dbg [[DBG98:![0-9]+]]
+// CHECK5-NEXT:    [[INC:%.*]] = fadd double [[TMP6]], 1.000000e+00, !dbg [[DBG98]]
+// CHECK5-NEXT:    store double [[INC]], ptr [[TMP5]], align 8, !dbg [[DBG98]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP1]], align 8, !dbg [[DBG96]]
+// CHECK5-NEXT:    call void @__kmpc_free(i32 [[TMP3]], ptr [[DOTA__VOID_ADDR]], ptr [[TMP7]]), !dbg [[DBG98]]
+// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB12:[0-9]+]], i32 [[TMP3]]), !dbg [[DBG99:![0-9]+]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG99]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN2SSC2ERi
-// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[D:%.*]]) unnamed_addr #[[ATTR2]] align 2 personality ptr @__gxx_personality_v0 !dbg [[DBG98:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(24) [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[D:%.*]]) unnamed_addr #[[ATTR2]] align 2 personality ptr @__gxx_personality_v0 !dbg [[DBG100:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[D_ADDR:%.*]] = alloca ptr, align 8
@@ -1861,88 +1861,88 @@ int main() {
 // CHECK5-NEXT:    [[C3:%.*]] = alloca i32, align 4
 // CHECK5-NEXT:    [[_TMP4:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[REF_TMP:%.*]] = alloca [[CLASS_ANON_1:%.*]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = call i32 @__kmpc_global_thread_num(ptr @[[GLOB16:[0-9]+]]), !dbg [[DBG99:![0-9]+]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = call i32 @__kmpc_global_thread_num(ptr @[[GLOB16:[0-9]+]]), !dbg [[DBG101:![0-9]+]]
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[D]], ptr [[D_ADDR]], align 8
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
-// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[STRUCT_SS:%.*]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG100:![0-9]+]]
-// CHECK5-NEXT:    store i32 0, ptr [[A]], align 4, !dbg [[DBG100]]
-// CHECK5-NEXT:    [[B:%.*]] = getelementptr inbounds nuw [[STRUCT_SS]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG101:![0-9]+]]
-// CHECK5-NEXT:    [[BF_LOAD:%.*]] = load i8, ptr [[B]], align 8, !dbg [[DBG101]]
-// CHECK5-NEXT:    [[BF_CLEAR:%.*]] = and i8 [[BF_LOAD]], -16, !dbg [[DBG101]]
-// CHECK5-NEXT:    [[BF_SET:%.*]] = or i8 [[BF_CLEAR]], 0, !dbg [[DBG101]]
-// CHECK5-NEXT:    store i8 [[BF_SET]], ptr [[B]], align 8, !dbg [[DBG101]]
-// CHECK5-NEXT:    [[C:%.*]] = getelementptr inbounds nuw [[STRUCT_SS]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG102:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[D_ADDR]], align 8, !dbg [[DBG103:![0-9]+]], !nonnull [[META7]], !align [[META104:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[C]], align 8, !dbg [[DBG102]]
-// CHECK5-NEXT:    store ptr [[A2]], ptr [[TMP]], align 8, !dbg [[DBG105:![0-9]+]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr @omp_default_mem_alloc, align 8, !dbg [[DBG106:![0-9]+]]
-// CHECK5-NEXT:    [[DOTB__VOID_ADDR:%.*]] = call ptr @__kmpc_alloc(i32 [[TMP0]], i64 4, ptr [[TMP2]]), !dbg [[DBG105]]
-// CHECK5-NEXT:    store ptr [[C3]], ptr [[_TMP4]], align 8, !dbg [[DBG105]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG107:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[THIS1]], ptr [[TMP3]], align 8, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP]], align 8, !dbg [[DBG108:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[TMP4]], align 8, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG107]]
-// CHECK5-NEXT:    store ptr [[DOTB__VOID_ADDR]], ptr [[TMP6]], align 8, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP4]], align 8, !dbg [[DBG108]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8, !dbg [[DBG107]]
+// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[STRUCT_SS:%.*]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG102:![0-9]+]]
+// CHECK5-NEXT:    store i32 0, ptr [[A]], align 4, !dbg [[DBG102]]
+// CHECK5-NEXT:    [[B:%.*]] = getelementptr inbounds nuw [[STRUCT_SS]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG103:![0-9]+]]
+// CHECK5-NEXT:    [[BF_LOAD:%.*]] = load i8, ptr [[B]], align 8, !dbg [[DBG103]]
+// CHECK5-NEXT:    [[BF_CLEAR:%.*]] = and i8 [[BF_LOAD]], -16, !dbg [[DBG103]]
+// CHECK5-NEXT:    [[BF_SET:%.*]] = or i8 [[BF_CLEAR]], 0, !dbg [[DBG103]]
+// CHECK5-NEXT:    store i8 [[BF_SET]], ptr [[B]], align 8, !dbg [[DBG103]]
+// CHECK5-NEXT:    [[C:%.*]] = getelementptr inbounds nuw [[STRUCT_SS]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG104:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[D_ADDR]], align 8, !dbg [[DBG105:![0-9]+]], !nonnull [[META7]], !align [[META106:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[C]], align 8, !dbg [[DBG104]]
+// CHECK5-NEXT:    store ptr [[A2]], ptr [[TMP]], align 8, !dbg [[DBG107:![0-9]+]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr @omp_default_mem_alloc, align 8, !dbg [[DBG108:![0-9]+]]
+// CHECK5-NEXT:    [[DOTB__VOID_ADDR:%.*]] = call ptr @__kmpc_alloc(i32 [[TMP0]], i64 4, ptr [[TMP2]]), !dbg [[DBG107]]
+// CHECK5-NEXT:    store ptr [[C3]], ptr [[_TMP4]], align 8, !dbg [[DBG107]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 0, !dbg [[DBG109:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[THIS1]], ptr [[TMP3]], align 8, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP]], align 8, !dbg [[DBG110:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[TMP4]], align 8, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 2, !dbg [[DBG109]]
+// CHECK5-NEXT:    store ptr [[DOTB__VOID_ADDR]], ptr [[TMP6]], align 8, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP4]], align 8, !dbg [[DBG110]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8, !dbg [[DBG109]]
 // CHECK5-NEXT:    invoke void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG107]]
+// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG109]]
 // CHECK5:       invoke.cont:
-// CHECK5-NEXT:    [[TMP9:%.*]] = load ptr, ptr @omp_default_mem_alloc, align 8, !dbg [[DBG106]]
-// CHECK5-NEXT:    call void @__kmpc_free(i32 [[TMP0]], ptr [[DOTB__VOID_ADDR]], ptr [[TMP9]]), !dbg [[DBG107]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG109:![0-9]+]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = load ptr, ptr @omp_default_mem_alloc, align 8, !dbg [[DBG108]]
+// CHECK5-NEXT:    call void @__kmpc_free(i32 [[TMP0]], ptr [[DOTB__VOID_ADDR]], ptr [[TMP9]]), !dbg [[DBG109]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG111:![0-9]+]]
 // CHECK5:       terminate.lpad:
 // CHECK5-NEXT:    [[TMP10:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG107]]
-// CHECK5-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0, !dbg [[DBG107]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR11]], !dbg [[DBG107]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG107]]
+// CHECK5-NEXT:            catch ptr null, !dbg [[DBG109]]
+// CHECK5-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0, !dbg [[DBG109]]
+// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR11]], !dbg [[DBG109]]
+// CHECK5-NEXT:    unreachable, !dbg [[DBG109]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv
-// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(32) [[THIS:%.*]]) #[[ATTR2]] align 2 !dbg [[DBG110:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 8 dereferenceable(32) [[THIS:%.*]]) #[[ATTR2]] align 2 !dbg [[DBG112:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = call i32 @__kmpc_global_thread_num(ptr @[[GLOB22:[0-9]+]]), !dbg [[DBG111:![0-9]+]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = call i32 @__kmpc_global_thread_num(ptr @[[GLOB22:[0-9]+]]), !dbg [[DBG113:![0-9]+]]
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    [[TMP1:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1:%.*]], ptr [[THIS1]], i32 0, i32 0
 // CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[TMP1]], align 8
-// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG112:![0-9]+]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP3]], align 8, !dbg [[DBG112]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load i32, ptr [[TMP4]], align 4, !dbg [[DBG113:![0-9]+]]
-// CHECK5-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP5]], 1, !dbg [[DBG113]]
-// CHECK5-NEXT:    store i32 [[INC]], ptr [[TMP4]], align 4, !dbg [[DBG113]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG114:![0-9]+]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP6]], align 8, !dbg [[DBG114]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG115:![0-9]+]]
-// CHECK5-NEXT:    [[DEC:%.*]] = add nsw i32 [[TMP8]], -1, !dbg [[DBG115]]
-// CHECK5-NEXT:    store i32 [[DEC]], ptr [[TMP7]], align 4, !dbg [[DBG115]]
-// CHECK5-NEXT:    [[TMP9:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG116:![0-9]+]]
-// CHECK5-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[TMP9]], align 8, !dbg [[DBG116]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP11:%.*]] = load i32, ptr [[TMP10]], align 4, !dbg [[DBG117:![0-9]+]]
-// CHECK5-NEXT:    [[DIV:%.*]] = sdiv i32 [[TMP11]], 1, !dbg [[DBG117]]
-// CHECK5-NEXT:    store i32 [[DIV]], ptr [[TMP10]], align 4, !dbg [[DBG117]]
-// CHECK5-NEXT:    [[TMP12:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG118:![0-9]+]]
-// CHECK5-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[TMP12]], align 8, !dbg [[DBG118]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4, !dbg [[DBG118]]
-// CHECK5-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB22]], i32 [[TMP0]], i32 [[TMP14]]), !dbg [[DBG119:![0-9]+]]
-// CHECK5-NEXT:    [[TMP15:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG120:![0-9]+]]
-// CHECK5-NEXT:    [[TMP16:%.*]] = load ptr, ptr [[TMP15]], align 8, !dbg [[DBG120]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP17:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG121:![0-9]+]]
-// CHECK5-NEXT:    [[TMP18:%.*]] = load ptr, ptr [[TMP17]], align 8, !dbg [[DBG121]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP19:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG122:![0-9]+]]
-// CHECK5-NEXT:    [[TMP20:%.*]] = load ptr, ptr [[TMP19]], align 8, !dbg [[DBG122]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB24:[0-9]+]], i32 4, ptr @_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined, ptr [[TMP2]], ptr [[TMP16]], ptr [[TMP18]], ptr [[TMP20]]), !dbg [[DBG119]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG123:![0-9]+]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG114:![0-9]+]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP3]], align 8, !dbg [[DBG114]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load i32, ptr [[TMP4]], align 4, !dbg [[DBG115:![0-9]+]]
+// CHECK5-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP5]], 1, !dbg [[DBG115]]
+// CHECK5-NEXT:    store i32 [[INC]], ptr [[TMP4]], align 4, !dbg [[DBG115]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG116:![0-9]+]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP6]], align 8, !dbg [[DBG116]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG117:![0-9]+]]
+// CHECK5-NEXT:    [[DEC:%.*]] = add nsw i32 [[TMP8]], -1, !dbg [[DBG117]]
+// CHECK5-NEXT:    store i32 [[DEC]], ptr [[TMP7]], align 4, !dbg [[DBG117]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG118:![0-9]+]]
+// CHECK5-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[TMP9]], align 8, !dbg [[DBG118]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP11:%.*]] = load i32, ptr [[TMP10]], align 4, !dbg [[DBG119:![0-9]+]]
+// CHECK5-NEXT:    [[DIV:%.*]] = sdiv i32 [[TMP11]], 1, !dbg [[DBG119]]
+// CHECK5-NEXT:    store i32 [[DIV]], ptr [[TMP10]], align 4, !dbg [[DBG119]]
+// CHECK5-NEXT:    [[TMP12:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG120:![0-9]+]]
+// CHECK5-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[TMP12]], align 8, !dbg [[DBG120]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4, !dbg [[DBG120]]
+// CHECK5-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB22]], i32 [[TMP0]], i32 [[TMP14]]), !dbg [[DBG121:![0-9]+]]
+// CHECK5-NEXT:    [[TMP15:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 1, !dbg [[DBG122:![0-9]+]]
+// CHECK5-NEXT:    [[TMP16:%.*]] = load ptr, ptr [[TMP15]], align 8, !dbg [[DBG122]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP17:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 2, !dbg [[DBG123:![0-9]+]]
+// CHECK5-NEXT:    [[TMP18:%.*]] = load ptr, ptr [[TMP17]], align 8, !dbg [[DBG123]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP19:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[THIS1]], i32 0, i32 3, !dbg [[DBG124:![0-9]+]]
+// CHECK5-NEXT:    [[TMP20:%.*]] = load ptr, ptr [[TMP19]], align 8, !dbg [[DBG124]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB24:[0-9]+]], i32 4, ptr @_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined, ptr [[TMP2]], ptr [[TMP16]], ptr [[TMP18]], ptr [[TMP20]]), !dbg [[DBG121]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG125:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[A:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[B:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[C:%.*]]) #[[ATTR9]] !dbg [[DBG124:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[A:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[B:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[C:%.*]]) #[[ATTR9]] !dbg [[DBG126:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1970,141 +1970,141 @@ int main() {
 // CHECK5-NEXT:    store ptr [[A]], ptr [[A_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[B]], ptr [[B_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[C]], ptr [[C_ADDR]], align 8
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG125:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[A_ADDR]], align 8, !dbg [[DBG125]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[B_ADDR]], align 8, !dbg [[DBG125]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[C_ADDR]], align 8, !dbg [[DBG125]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP]], align 8, !dbg [[DBG125]]
-// CHECK5-NEXT:    store ptr [[TMP3]], ptr [[_TMP1]], align 8, !dbg [[DBG125]]
-// CHECK5-NEXT:    [[E2:%.*]] = getelementptr inbounds nuw [[STRUCT_SS:%.*]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG126:![0-9]+]]
-// CHECK5-NEXT:    store ptr [[E2]], ptr [[E]], align 8, !dbg [[DBG126]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP]], align 8, !dbg [[DBG127:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP4]], ptr [[_TMP3]], align 8, !dbg [[DBG128:![0-9]+]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[E]], align 8, !dbg [[DBG129:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[_TMP4]], align 8, !dbg [[DBG128]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[_TMP1]], align 8, !dbg [[DBG130:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store ptr [[TMP6]], ptr [[_TMP5]], align 8, !dbg [[DBG128]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[_TMP3]], align 8, !dbg [[DBG131:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG131]]
-// CHECK5-NEXT:    store i32 [[TMP8]], ptr [[A6]], align 4, !dbg [[DBG131]]
-// CHECK5-NEXT:    store ptr [[A6]], ptr [[_TMP7]], align 8, !dbg [[DBG128]]
-// CHECK5-NEXT:    [[TMP9:%.*]] = load i32, ptr [[TMP2]], align 4, !dbg [[DBG132:![0-9]+]]
-// CHECK5-NEXT:    store i32 [[TMP9]], ptr [[B8]], align 4, !dbg [[DBG132]]
-// CHECK5-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[_TMP5]], align 8, !dbg [[DBG133:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP11:%.*]] = load i32, ptr [[TMP10]], align 4, !dbg [[DBG133]]
-// CHECK5-NEXT:    store i32 [[TMP11]], ptr [[C9]], align 4, !dbg [[DBG133]]
-// CHECK5-NEXT:    store ptr [[C9]], ptr [[_TMP10]], align 8, !dbg [[DBG128]]
-// CHECK5-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP4]], align 8, !dbg [[DBG126]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    store i32 0, ptr [[E11]], align 4, !dbg [[DBG126]]
-// CHECK5-NEXT:    store ptr [[E11]], ptr [[_TMP12]], align 8, !dbg [[DBG128]]
-// CHECK5-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[_TMP7]], align 8, !dbg [[DBG127]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4, !dbg [[DBG134:![0-9]+]]
-// CHECK5-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP14]], 1, !dbg [[DBG134]]
-// CHECK5-NEXT:    store i32 [[INC]], ptr [[TMP13]], align 4, !dbg [[DBG134]]
-// CHECK5-NEXT:    [[TMP15:%.*]] = load ptr, ptr [[_TMP12]], align 8, !dbg [[DBG129]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP16:%.*]] = load i32, ptr [[TMP15]], align 4, !dbg [[DBG135:![0-9]+]]
-// CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP16]], 1, !dbg [[DBG135]]
-// CHECK5-NEXT:    store i32 [[ADD]], ptr [[TMP15]], align 4, !dbg [[DBG135]]
-// CHECK5-NEXT:    [[TMP17:%.*]] = load ptr, ptr [[_TMP10]], align 8, !dbg [[DBG130]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[TMP18:%.*]] = load i32, ptr [[TMP17]], align 4, !dbg [[DBG136:![0-9]+]]
-// CHECK5-NEXT:    [[DIV:%.*]] = sdiv i32 [[TMP18]], 1, !dbg [[DBG136]]
-// CHECK5-NEXT:    store i32 [[DIV]], ptr [[TMP17]], align 4, !dbg [[DBG136]]
-// CHECK5-NEXT:    [[TMP19:%.*]] = getelementptr inbounds [1 x ptr], ptr [[DOTOMP_REDUCTION_RED_LIST]], i64 0, i64 0, !dbg [[DBG134]]
-// CHECK5-NEXT:    store ptr [[E11]], ptr [[TMP19]], align 8, !dbg [[DBG134]]
-// CHECK5-NEXT:    [[TMP20:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG134]]
-// CHECK5-NEXT:    [[TMP21:%.*]] = load i32, ptr [[TMP20]], align 4, !dbg [[DBG134]]
-// CHECK5-NEXT:    [[TMP22:%.*]] = call i32 @__kmpc_reduce(ptr @[[GLOB18:[0-9]+]], i32 [[TMP21]], i32 1, i64 8, ptr [[DOTOMP_REDUCTION_RED_LIST]], ptr @_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined.omp.reduction.reduction_func, ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG134]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8, !dbg [[DBG127:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[A_ADDR]], align 8, !dbg [[DBG127]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[B_ADDR]], align 8, !dbg [[DBG127]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[C_ADDR]], align 8, !dbg [[DBG127]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP1]], ptr [[TMP]], align 8, !dbg [[DBG127]]
+// CHECK5-NEXT:    store ptr [[TMP3]], ptr [[_TMP1]], align 8, !dbg [[DBG127]]
+// CHECK5-NEXT:    [[E2:%.*]] = getelementptr inbounds nuw [[STRUCT_SS:%.*]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG128:![0-9]+]]
+// CHECK5-NEXT:    store ptr [[E2]], ptr [[E]], align 8, !dbg [[DBG128]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = load ptr, ptr [[TMP]], align 8, !dbg [[DBG129:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP4]], ptr [[_TMP3]], align 8, !dbg [[DBG130:![0-9]+]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[E]], align 8, !dbg [[DBG131:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP5]], ptr [[_TMP4]], align 8, !dbg [[DBG130]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = load ptr, ptr [[_TMP1]], align 8, !dbg [[DBG132:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store ptr [[TMP6]], ptr [[_TMP5]], align 8, !dbg [[DBG130]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[_TMP3]], align 8, !dbg [[DBG133:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG133]]
+// CHECK5-NEXT:    store i32 [[TMP8]], ptr [[A6]], align 4, !dbg [[DBG133]]
+// CHECK5-NEXT:    store ptr [[A6]], ptr [[_TMP7]], align 8, !dbg [[DBG130]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = load i32, ptr [[TMP2]], align 4, !dbg [[DBG134:![0-9]+]]
+// CHECK5-NEXT:    store i32 [[TMP9]], ptr [[B8]], align 4, !dbg [[DBG134]]
+// CHECK5-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[_TMP5]], align 8, !dbg [[DBG135:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP11:%.*]] = load i32, ptr [[TMP10]], align 4, !dbg [[DBG135]]
+// CHECK5-NEXT:    store i32 [[TMP11]], ptr [[C9]], align 4, !dbg [[DBG135]]
+// CHECK5-NEXT:    store ptr [[C9]], ptr [[_TMP10]], align 8, !dbg [[DBG130]]
+// CHECK5-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP4]], align 8, !dbg [[DBG128]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    store i32 0, ptr [[E11]], align 4, !dbg [[DBG128]]
+// CHECK5-NEXT:    store ptr [[E11]], ptr [[_TMP12]], align 8, !dbg [[DBG130]]
+// CHECK5-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[_TMP7]], align 8, !dbg [[DBG129]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP14:%.*]] = load i32, ptr [[TMP13]], align 4, !dbg [[DBG136:![0-9]+]]
+// CHECK5-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP14]], 1, !dbg [[DBG136]]
+// CHECK5-NEXT:    store i32 [[INC]], ptr [[TMP13]], align 4, !dbg [[DBG136]]
+// CHECK5-NEXT:    [[TMP15:%.*]] = load ptr, ptr [[_TMP12]], align 8, !dbg [[DBG131]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP16:%.*]] = load i32, ptr [[TMP15]], align 4, !dbg [[DBG137:![0-9]+]]
+// CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP16]], 1, !dbg [[DBG137]]
+// CHECK5-NEXT:    store i32 [[ADD]], ptr [[TMP15]], align 4, !dbg [[DBG137]]
+// CHECK5-NEXT:    [[TMP17:%.*]] = load ptr, ptr [[_TMP10]], align 8, !dbg [[DBG132]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[TMP18:%.*]] = load i32, ptr [[TMP17]], align 4, !dbg [[DBG138:![0-9]+]]
+// CHECK5-NEXT:    [[DIV:%.*]] = sdiv i32 [[TMP18]], 1, !dbg [[DBG138]]
+// CHECK5-NEXT:    store i32 [[DIV]], ptr [[TMP17]], align 4, !dbg [[DBG138]]
+// CHECK5-NEXT:    [[TMP19:%.*]] = getelementptr inbounds [1 x ptr], ptr [[DOTOMP_REDUCTION_RED_LIST]], i64 0, i64 0, !dbg [[DBG136]]
+// CHECK5-NEXT:    store ptr [[E11]], ptr [[TMP19]], align 8, !dbg [[DBG136]]
+// CHECK5-NEXT:    [[TMP20:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG136]]
+// CHECK5-NEXT:    [[TMP21:%.*]] = load i32, ptr [[TMP20]], align 4, !dbg [[DBG136]]
+// CHECK5-NEXT:    [[TMP22:%.*]] = call i32 @__kmpc_reduce(ptr @[[GLOB18:[0-9]+]], i32 [[TMP21]], i32 1, i64 8, ptr [[DOTOMP_REDUCTION_RED_LIST]], ptr @_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined.omp.reduction.reduction_func, ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG136]]
 // CHECK5-NEXT:    switch i32 [[TMP22]], label [[DOTOMP_REDUCTION_DEFAULT:%.*]] [
 // CHECK5-NEXT:      i32 1, label [[DOTOMP_REDUCTION_CASE1:%.*]]
 // CHECK5-NEXT:      i32 2, label [[DOTOMP_REDUCTION_CASE2:%.*]]
-// CHECK5-NEXT:    ], !dbg [[DBG134]]
+// CHECK5-NEXT:    ], !dbg [[DBG136]]
 // CHECK5:       .omp.reduction.case1:
-// CHECK5-NEXT:    [[TMP23:%.*]] = load i32, ptr [[TMP12]], align 4, !dbg [[DBG126]]
-// CHECK5-NEXT:    [[TMP24:%.*]] = load i32, ptr [[E11]], align 4, !dbg [[DBG126]]
-// CHECK5-NEXT:    [[ADD13:%.*]] = add nsw i32 [[TMP23]], [[TMP24]], !dbg [[DBG137:![0-9]+]]
-// CHECK5-NEXT:    store i32 [[ADD13]], ptr [[TMP12]], align 4, !dbg [[DBG137]]
-// CHECK5-NEXT:    call void @__kmpc_end_reduce(ptr @[[GLOB18]], i32 [[TMP21]], ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG134]]
-// CHECK5-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]], !dbg [[DBG134]]
+// CHECK5-NEXT:    [[TMP23:%.*]] = load i32, ptr [[TMP12]], align 4, !dbg [[DBG128]]
+// CHECK5-NEXT:    [[TMP24:%.*]] = load i32, ptr [[E11]], align 4, !dbg [[DBG128]]
+// CHECK5-NEXT:    [[ADD13:%.*]] = add nsw i32 [[TMP23]], [[TMP24]], !dbg [[DBG139:![0-9]+]]
+// CHECK5-NEXT:    store i32 [[ADD13]], ptr [[TMP12]], align 4, !dbg [[DBG139]]
+// CHECK5-NEXT:    call void @__kmpc_end_reduce(ptr @[[GLOB18]], i32 [[TMP21]], ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG136]]
+// CHECK5-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]], !dbg [[DBG136]]
 // CHECK5:       .omp.reduction.case2:
-// CHECK5-NEXT:    [[TMP25:%.*]] = load i32, ptr [[E11]], align 4, !dbg [[DBG126]]
-// CHECK5-NEXT:    [[TMP26:%.*]] = atomicrmw add ptr [[TMP12]], i32 [[TMP25]] monotonic, align 4, !dbg [[DBG134]]
-// CHECK5-NEXT:    call void @__kmpc_end_reduce(ptr @[[GLOB18]], i32 [[TMP21]], ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG134]]
-// CHECK5-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]], !dbg [[DBG134]]
+// CHECK5-NEXT:    [[TMP25:%.*]] = load i32, ptr [[E11]], align 4, !dbg [[DBG128]]
+// CHECK5-NEXT:    [[TMP26:%.*]] = atomicrmw add ptr [[TMP12]], i32 [[TMP25]] monotonic, align 4, !dbg [[DBG136]]
+// CHECK5-NEXT:    call void @__kmpc_end_reduce(ptr @[[GLOB18]], i32 [[TMP21]], ptr @.gomp_critical_user_.reduction.var), !dbg [[DBG136]]
+// CHECK5-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]], !dbg [[DBG136]]
 // CHECK5:       .omp.reduction.default:
-// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB20:[0-9]+]], i32 [[TMP21]]), !dbg [[DBG138:![0-9]+]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG138]]
+// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB20:[0-9]+]], i32 [[TMP21]]), !dbg [[DBG140:![0-9]+]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG140]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined.omp.reduction.reduction_func
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR10:[0-9]+]] !dbg [[DBG139:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR10:[0-9]+]] !dbg [[DBG141:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[TMP0]], ptr [[DOTADDR]], align 8
 // CHECK5-NEXT:    store ptr [[TMP1]], ptr [[DOTADDR1]], align 8
-// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[DOTADDR]], align 8, !dbg [[DBG140:![0-9]+]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[DOTADDR1]], align 8, !dbg [[DBG140]]
-// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [1 x ptr], ptr [[TMP3]], i64 0, i64 0, !dbg [[DBG140]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP4]], align 8, !dbg [[DBG140]]
-// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds [1 x ptr], ptr [[TMP2]], i64 0, i64 0, !dbg [[DBG140]]
-// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP6]], align 8, !dbg [[DBG140]]
-// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG141:![0-9]+]]
-// CHECK5-NEXT:    [[TMP9:%.*]] = load i32, ptr [[TMP5]], align 4, !dbg [[DBG141]]
-// CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP8]], [[TMP9]], !dbg [[DBG142:![0-9]+]]
-// CHECK5-NEXT:    store i32 [[ADD]], ptr [[TMP7]], align 4, !dbg [[DBG142]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG141]]
+// CHECK5-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[DOTADDR]], align 8, !dbg [[DBG142:![0-9]+]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[DOTADDR1]], align 8, !dbg [[DBG142]]
+// CHECK5-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [1 x ptr], ptr [[TMP3]], i64 0, i64 0, !dbg [[DBG142]]
+// CHECK5-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[TMP4]], align 8, !dbg [[DBG142]]
+// CHECK5-NEXT:    [[TMP6:%.*]] = getelementptr inbounds [1 x ptr], ptr [[TMP2]], i64 0, i64 0, !dbg [[DBG142]]
+// CHECK5-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[TMP6]], align 8, !dbg [[DBG142]]
+// CHECK5-NEXT:    [[TMP8:%.*]] = load i32, ptr [[TMP7]], align 4, !dbg [[DBG143:![0-9]+]]
+// CHECK5-NEXT:    [[TMP9:%.*]] = load i32, ptr [[TMP5]], align 4, !dbg [[DBG143]]
+// CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP8]], [[TMP9]], !dbg [[DBG144:![0-9]+]]
+// CHECK5-NEXT:    store i32 [[ADD]], ptr [[TMP7]], align 4, !dbg [[DBG144]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG143]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN9TestClassC2ERKS_
-// CHECK5-SAME: (ptr noundef nonnull align 4 dereferenceable(4) [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[C:%.*]]) unnamed_addr #[[ATTR2]] align 2 !dbg [[DBG143:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef nonnull align 4 dereferenceable(4) [[THIS:%.*]], ptr noundef nonnull align 4 dereferenceable(4) [[C:%.*]]) unnamed_addr #[[ATTR2]] align 2 !dbg [[DBG145:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[C_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[C]], ptr [[C_ADDR]], align 8
 // CHECK5-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
-// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[CLASS_TESTCLASS:%.*]], ptr [[THIS1]], i32 0, i32 0, !dbg [[DBG144:![0-9]+]]
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[C_ADDR]], align 8, !dbg [[DBG145:![0-9]+]], !nonnull [[META7]], !align [[META104]]
-// CHECK5-NEXT:    [[A2:%.*]] = getelementptr inbounds nuw [[CLASS_TESTCLASS]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG146:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load i32, ptr [[A2]], align 4, !dbg [[DBG146]]
-// CHECK5-NEXT:    store i32 [[TMP1]], ptr [[A]], align 4, !dbg [[DBG144]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG147:![0-9]+]]
+// CHECK5-NEXT:    [[A:%.*]] = getelementptr inbounds nuw [[CLASS_TESTCLASS:%.*]], ptr [[THIS1]], i32 0, i32 0, !dbg [[DBG146:![0-9]+]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[C_ADDR]], align 8, !dbg [[DBG147:![0-9]+]], !nonnull [[META7]], !align [[META106]]
+// CHECK5-NEXT:    [[A2:%.*]] = getelementptr inbounds nuw [[CLASS_TESTCLASS]], ptr [[TMP0]], i32 0, i32 0, !dbg [[DBG148:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load i32, ptr [[A2]], align 4, !dbg [[DBG148]]
+// CHECK5-NEXT:    store i32 [[TMP1]], ptr [[A]], align 4, !dbg [[DBG146]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG149:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_Z15parallel_singlev
-// CHECK5-SAME: () #[[ATTR2]] !dbg [[DBG148:![0-9]+]] {
+// CHECK5-SAME: () #[[ATTR2]] !dbg [[DBG150:![0-9]+]] {
 // CHECK5-NEXT:  entry:
-// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB28:[0-9]+]], i32 0, ptr @_Z15parallel_singlev.omp_outlined), !dbg [[DBG149:![0-9]+]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG150:![0-9]+]]
+// CHECK5-NEXT:    call void (ptr, i32, ptr, ...) @__kmpc_fork_call(ptr @[[GLOB28:[0-9]+]], i32 0, ptr @_Z15parallel_singlev.omp_outlined), !dbg [[DBG151:![0-9]+]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG152:![0-9]+]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_Z15parallel_singlev.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 !dbg [[DBG151:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 !dbg [[DBG153:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[DOTGLOBAL_TID_]], ptr [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK5-NEXT:    store ptr [[DOTBOUND_TID_]], ptr [[DOTBOUND_TID__ADDR]], align 8
 // CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG152:![0-9]+]]
+// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG154:![0-9]+]]
 // CHECK5:       invoke.cont:
-// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG153:![0-9]+]]
-// CHECK5-NEXT:    [[TMP1:%.*]] = load i32, ptr [[TMP0]], align 4, !dbg [[DBG153]]
-// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB26:[0-9]+]], i32 [[TMP1]]), !dbg [[DBG153]]
-// CHECK5-NEXT:    ret void, !dbg [[DBG153]]
+// CHECK5-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[DOTGLOBAL_TID__ADDR]], align 8, !dbg [[DBG155:![0-9]+]]
+// CHECK5-NEXT:    [[TMP1:%.*]] = load i32, ptr [[TMP0]], align 4, !dbg [[DBG155]]
+// CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB26:[0-9]+]], i32 [[TMP1]]), !dbg [[DBG155]]
+// CHECK5-NEXT:    ret void, !dbg [[DBG155]]
 // CHECK5:       terminate.lpad:
 // CHECK5-NEXT:    [[TMP2:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG152]]
-// CHECK5-NEXT:    [[TMP3:%.*]] = extractvalue { ptr, i32 } [[TMP2]], 0, !dbg [[DBG152]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP3]]) #[[ATTR11]], !dbg [[DBG152]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG152]]
+// CHECK5-NEXT:            catch ptr null, !dbg [[DBG154]]
+// CHECK5-NEXT:    [[TMP3:%.*]] = extractvalue { ptr, i32 } [[TMP2]], 0, !dbg [[DBG154]]
+// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP3]]) #[[ATTR11]], !dbg [[DBG154]]
+// CHECK5-NEXT:    unreachable, !dbg [[DBG154]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_GLOBAL__sub_I_scope_codegen.cpp
-// CHECK5-SAME: () #[[ATTR0]] section "__TEXT,__StaticInit,regular,pure_instructions" !dbg [[DBG154:![0-9]+]] {
+// CHECK5-SAME: () #[[ATTR0]] section "__TEXT,__StaticInit,regular,pure_instructions" !dbg [[DBG156:![0-9]+]] {
 // CHECK5-NEXT:  entry:
-// CHECK5-NEXT:    call void @__cxx_global_var_init(), !dbg [[DBG155:![0-9]+]]
-// CHECK5-NEXT:    call void @__cxx_global_var_init.1(), !dbg [[DBG155]]
+// CHECK5-NEXT:    call void @__cxx_global_var_init(), !dbg [[DBG157:![0-9]+]]
+// CHECK5-NEXT:    call void @__cxx_global_var_init.1(), !dbg [[DBG157]]
 // CHECK5-NEXT:    ret void
 //
 //

@@ -3582,10 +3582,10 @@ void range_for_collapsed() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR6:[0-9]+]] {
-// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR2:[0-9]+]]
-// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR7]]
-// CHECK5-NEXT:    unreachable
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR6:[0-9]+]] !dbg [[DBG115:![0-9]+]] {
+// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR2:[0-9]+]], !dbg [[DBG116:![0-9]+]]
+// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR7]], !dbg [[DBG116]]
+// CHECK5-NEXT:    unreachable, !dbg [[DBG116]]
 //
 //
 // CHECK6-LABEL: define {{[^@]+}}@_Z17with_var_schedulev

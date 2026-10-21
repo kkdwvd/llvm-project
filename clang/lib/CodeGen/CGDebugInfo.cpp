@@ -4971,11 +4971,16 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateFunctionType(const Decl *D,
                                                              llvm::DIFile *F) {
   // In CodeView, we emit the function types in line tables only because the
   // only way to distinguish between functions is by display name and type.
-  if (!D || (DebugKind <= llvm::codegenoptions::DebugLineTablesOnly &&
-             !CGM.getCodeGenOpts().EmitCodeView))
+  if (DebugKind <= llvm::codegenoptions::DebugLineTablesOnly &&
+      !CGM.getCodeGenOpts().EmitCodeView)
     // Create fake but valid subroutine type. Otherwise -verify would fail, and
     // subprogram DIE will miss DW_AT_decl_file and DW_AT_decl_line fields.
     return DBuilder.createSubroutineType(DBuilder.getOrCreateTypeArray({}));
+
+  // A function without a declaration, one that CodeGen made up, has the
+  // prototype it was made with.
+  if (!D)
+    return cast<llvm::DISubroutineType>(getOrCreateType(FnType, F));
 
   if (const auto *Method = dyn_cast<CXXDestructorDecl>(D)) {
     // Read method type from 'FnType' because 'D.getType()' does not cover
