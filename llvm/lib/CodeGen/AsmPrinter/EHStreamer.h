@@ -107,10 +107,20 @@ protected:
   /// marked 'nounwind' have no entry and must not be contained in the try-range
   /// of any entry - they form gaps in the table.  Entries must be ordered by
   /// try-range address. CallSiteRanges vector is only populated for Itanium
-  /// exception handling.
+  /// exception handling. Where the landing pads carry indices, the table is
+  /// computeIndexedCallSiteTable's instead.
   virtual void computeCallSiteTable(
       SmallVectorImpl<CallSiteEntry> &CallSites,
       SmallVectorImpl<CallSiteRange> &CallSiteRanges,
+      const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+      const SmallVectorImpl<unsigned> &FirstActions);
+
+  /// Compute the call-site table of a function whose landing pads carry
+  /// indices (Wasm, BPF): one entry per such pad, at its index, with no
+  /// try-range, since the pad calls the personality routine itself and hands
+  /// it the index.
+  void computeIndexedCallSiteTable(
+      SmallVectorImpl<CallSiteEntry> &CallSites,
       const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
       const SmallVectorImpl<unsigned> &FirstActions);
 

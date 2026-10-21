@@ -231,6 +231,18 @@ void EHStreamer::computeCallSiteTable(
     SmallVectorImpl<CallSiteRange> &CallSiteRanges,
     const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
     const SmallVectorImpl<unsigned> &FirstActions) {
+  // Where the landing pads carry indices, a call site entry in the table
+  // corresponds to not a call site for possibly-throwing functions but a
+  // landing pad. Control reaches the pad without a personality routine
+  // having run, in Wasm EH because the VM unwinds the stack and in BPF
+  // because the kernel does, and the pad calls the personality routine from
+  // the compiler-generated code, with its index. Refer to the WasmEHPrepare
+  // and BPFUnwindPrepare passes for more information.
+  if (Asm->MF->hasAnyWasmLandingPadIndex()) {
+    computeIndexedCallSiteTable(CallSites, LandingPads, FirstActions);
+    return;
+  }
+
   RangeMapType PadMap;
   computePadMap(LandingPads, PadMap);
 
@@ -360,6 +372,27 @@ void EHStreamer::computeCallSiteTable(
   }
 }
 
+void EHStreamer::computeIndexedCallSiteTable(
+    SmallVectorImpl<CallSiteEntry> &CallSites,
+    const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+    const SmallVectorImpl<unsigned> &FirstActions) {
+  MachineFunction &MF = *Asm->MF;
+  for (unsigned I = 0, N = LandingPads.size(); I < N; ++I) {
+    const LandingPadInfo *Info = LandingPads[I];
+    MachineBasicBlock *LPad = Info->LandingPadBlock;
+    // We don't emit LSDA for single catch (...).
+    if (!MF.hasWasmLandingPadIndex(LPad))
+      continue;
+    // The EH pads must be kept in the order the indices were assigned to
+    // them by the preparation pass.
+    unsigned LPadIndex = MF.getWasmLandingPadIndex(LPad);
+    CallSiteEntry Site = {nullptr, nullptr, Info, FirstActions[I]};
+    if (CallSites.size() < LPadIndex + 1)
+      CallSites.resize(LPadIndex + 1);
+    CallSites[LPadIndex] = Site;
+  }
+}
+
 /// Emit landing pads and actions.
 ///
 /// The general organization of the table is complex, but the basic concepts are
@@ -422,7 +455,9 @@ MCSymbol *EHStreamer::emitExceptionTable() {
   computeCallSiteTable(CallSites, CallSiteRanges, LandingPads, FirstActions);
 
   bool IsSJLJ = Asm->MAI.getExceptionHandlingType() == ExceptionHandling::SjLj;
-  bool IsWasm = Asm->MAI.getExceptionHandlingType() == ExceptionHandling::Wasm;
+  // The call sites are keyed by index, not by address, for SjLj and where the
+  // landing pads carry indices (computeIndexedCallSiteTable).
+  bool IndexedCallSites = IsSJLJ || MF->hasAnyWasmLandingPadIndex();
   bool HasLEB128Directives = Asm->MAI.hasLEB128Directives();
   unsigned CallSiteEncoding =
       IsSJLJ ? static_cast<unsigned>(dwarf::DW_EH_PE_udata4) :
@@ -493,7 +528,8 @@ MCSymbol *EHStreamer::emitExceptionTable() {
   // Helper for emitting references (offsets) for type table and the end of the
   // call-site table (which marks the beginning of the action table).
   //  * For Itanium, these references will be emitted for every callsite range.
-  //  * For SJLJ and Wasm, they will be emitted only once in the LSDA header.
+  //  * For indexed call sites, they will be emitted only once in the LSDA
+  //    header.
   auto EmitTypeTableRefAndCallSiteTableEndRef = [&]() {
     Asm->emitEncodingByte(TTypeEncoding, "@TType");
     if (HaveTTData) {
@@ -507,9 +543,9 @@ MCSymbol *EHStreamer::emitExceptionTable() {
     }
 
     // The Action table follows the call-site table. So we emit the
-    // label difference from here (start of the call-site table for SJLJ and
-    // Wasm, and start of a call-site range for Itanium) to the end of the
-    // whole call-site table (end of the last call-site range for Itanium).
+    // label difference from here (start of the call-site table for indexed
+    // call sites, and start of a call-site range for Itanium) to the end of
+    // the whole call-site table (end of the last call-site range for Itanium).
     MCSymbol *CstBeginLabel = Asm->createTempSymbol("cst_begin");
     Asm->emitEncodingByte(CallSiteEncoding, "Call site");
     Asm->emitLabelDifferenceAsULEB128(CstEndLabel, CstBeginLabel);
@@ -589,8 +625,8 @@ MCSymbol *EHStreamer::emitExceptionTable() {
     Asm->OutStreamer->emitULEB128IntValue(CallSiteTableSize);
   };
 
-  // SjLj / Wasm Exception handling
-  if (IsSJLJ || IsWasm) {
+  // Indexed call sites: SjLj, Wasm and BPF exception handling
+  if (IndexedCallSites) {
     Asm->OutStreamer->emitLabel(Asm->getMBBExceptionSym(Asm->MF->front()));
 
     // emit the LSDA header.

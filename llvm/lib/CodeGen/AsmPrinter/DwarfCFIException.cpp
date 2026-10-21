@@ -148,7 +148,10 @@ void DwarfCFIException::endBasicBlockSection(const MachineBasicBlock &MBB) {
 /// endFunction - Gather and emit post-function exception information.
 ///
 void DwarfCFIException::endFunction(const MachineFunction *MF) {
-  if (!shouldEmitPersonality)
+  // A function whose landing pads carry indices has a table whether or not
+  // CFI names a personality: its pads call the personality routine
+  // themselves, with their index and the table's address (BPFUnwind.cpp).
+  if (!shouldEmitPersonality && !MF->hasAnyWasmLandingPadIndex())
     return;
 
   emitExceptionTable();

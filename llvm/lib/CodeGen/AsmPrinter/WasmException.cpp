@@ -19,15 +19,11 @@
 #include "llvm/MC/MCStreamer.h"
 using namespace llvm;
 
+// The call-site table is keyed by the landing pad index that WasmEHPrepare
+// assigned: EHStreamer::computeIndexedCallSiteTable computes it for the
+// function, since its pads carry indices.
 void WasmException::endFunction(const MachineFunction *MF) {
-  bool ShouldEmitExceptionTable = false;
-  for (const LandingPadInfo &Info : MF->getLandingPads()) {
-    if (MF->hasWasmLandingPadIndex(Info.LandingPadBlock)) {
-      ShouldEmitExceptionTable = true;
-      break;
-    }
-  }
-  if (!ShouldEmitExceptionTable)
+  if (!MF->hasAnyWasmLandingPadIndex())
     return;
   MCSymbol *LSDALabel = emitExceptionTable();
   assert(LSDALabel && ".GCC_exception_table has not been emitted!");
@@ -42,34 +38,4 @@ void WasmException::endFunction(const MachineFunction *MF) {
       MCSymbolRefExpr::create(LSDAEndLabel, OutContext),
       MCSymbolRefExpr::create(LSDALabel, OutContext), OutContext);
   Asm->OutStreamer->emitELFSize(LSDALabel, SizeExp);
-}
-
-// Compute the call-site table for wasm EH. Even though we use the same function
-// name to share the common routines, a call site entry in the table corresponds
-// to not a call site for possibly-throwing functions but a landing pad. In wasm
-// EH the VM is responsible for stack unwinding. After an exception occurs and
-// the stack is unwound, the control flow is transferred to wasm 'catch'
-// instruction by the VM, after which the personality function is called from
-// the compiler-generated code. Refer to WasmEHPrepare pass for more
-// information.
-void WasmException::computeCallSiteTable(
-    SmallVectorImpl<CallSiteEntry> &CallSites,
-    SmallVectorImpl<CallSiteRange> &CallSiteRanges,
-    const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
-    const SmallVectorImpl<unsigned> &FirstActions) {
-  MachineFunction &MF = *Asm->MF;
-  for (unsigned I = 0, N = LandingPads.size(); I < N; ++I) {
-    const LandingPadInfo *Info = LandingPads[I];
-    MachineBasicBlock *LPad = Info->LandingPadBlock;
-    // We don't emit LSDA for single catch (...).
-    if (!MF.hasWasmLandingPadIndex(LPad))
-      continue;
-    // Wasm EH must maintain the EH pads in the order assigned to them by the
-    // WasmEHPrepare pass.
-    unsigned LPadIndex = MF.getWasmLandingPadIndex(LPad);
-    CallSiteEntry Site = {nullptr, nullptr, Info, FirstActions[I]};
-    if (CallSites.size() < LPadIndex + 1)
-      CallSites.resize(LPadIndex + 1);
-    CallSites[LPadIndex] = Site;
-  }
 }
