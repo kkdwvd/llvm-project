@@ -16,6 +16,7 @@
 //   - remove llvm.bpf.getelementptr.and.store builtins.
 //   - for loads and stores with base addresses from non-zero address space
 //     cast base address to zero address space (support for BPF address spaces).
+//   - describe a void(void) callee without debug info, so that it has BTF.
 //
 //===----------------------------------------------------------------------===//
 
@@ -23,6 +24,7 @@
 #include "BPFCORE.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Analysis.h"
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
@@ -651,6 +653,40 @@ static bool insertASpaceCasts(Module &M) {
   return Changed;
 }
 
+// A function the frontend calls on its own, as clang calls std::terminate()
+// from the __clang_call_terminate() it defines for an exception that would
+// leave a noexcept function, has no debug info when the unit does not declare
+// it, and so no BTF: libbpf cannot link the call to its definition, and the
+// kernel wants BTF for every function of a program. Describe such a callee as
+// BPF_TRAP is described (BPFISelLowering.cpp), by its symbol name, which is
+// how libbpf matches BTF to symbols. Only a void(void) callee: other types
+// would need source types the IR does not have.
+static bool describeVoidCallees(Module &M) {
+  if (M.debug_compile_units().empty())
+    return false;
+
+  DIBuilder DBuilder(M);
+  DICompileUnit *CU = *M.debug_compile_units_begin();
+  DISubroutineType *FuncType = nullptr;
+  bool Changed = false;
+  for (Function &F : M) {
+    FunctionType *FT = F.getFunctionType();
+    if (!F.isDeclaration() || F.isIntrinsic() || F.getSubprogram() ||
+        F.use_empty() || !FT->getReturnType()->isVoidTy() ||
+        FT->getNumParams() != 0 || FT->isVarArg())
+      continue;
+    if (!FuncType)
+      FuncType = DBuilder.createSubroutineType(
+          DBuilder.getOrCreateTypeArray({nullptr /*void return*/}));
+    F.setSubprogram(DBuilder.createFunction(CU, F.getName(), F.getName(),
+                                            nullptr, 0, FuncType, 0,
+                                            DINode::FlagZero,
+                                            DISubprogram::SPFlagZero));
+    Changed = true;
+  }
+  return Changed;
+}
+
 static bool adjustIR(Module &M,
                      function_ref<LoopInfo &(Function &)> GetLoopInfo) {
   bool Changed = removePassThroughBuiltin(M);
@@ -658,6 +694,7 @@ static bool adjustIR(Module &M,
   Changed = sinkMinMax(M, GetLoopInfo) || Changed;
   Changed = removeGEPBuiltins(M) || Changed;
   Changed = insertASpaceCasts(M) || Changed;
+  Changed = describeVoidCallees(M) || Changed;
   return Changed;
 }
 
