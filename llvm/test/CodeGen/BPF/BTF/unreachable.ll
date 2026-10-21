@@ -36,10 +36,13 @@ entry:
 ; CHECK-NEXT:   #NO_APP
 ; CHECK-NEXT: .Lfunc_end1:
 
+; bar has no debug info and is described for BTF as a void(void) callee.
 ; CHECK-BTF: [1] FUNC_PROTO '(anon)' ret_type_id=0 vlen=0
-; CHECK-BTF: [2] FUNC '__bpf_trap' type_id=1 linkage=extern
-; CHECK-BTF: [3] DATASEC '.ksyms' size=0 vlen=1
-; CHECK-BTF:  type_id=2 offset=0 size=0
+; CHECK-BTF: [2] FUNC 'bar' type_id=1 linkage=extern
+; CHECK-BTF: [3] FUNC_PROTO '(anon)' ret_type_id=0 vlen=0
+; CHECK-BTF: [4] FUNC '__bpf_trap' type_id=3 linkage=extern
+; CHECK-BTF: [5] DATASEC '.ksyms' size=0 vlen=1
+; CHECK-BTF:  type_id=4 offset=0 size=0
 
 declare dso_local void @bar()
 
