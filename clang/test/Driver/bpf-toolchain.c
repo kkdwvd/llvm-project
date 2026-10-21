@@ -110,15 +110,25 @@
 // LINK: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
 // LINK: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]"{{$}}
 
-// With one, compiler-rt's builtins from the resource directory come after the
-// inputs, unless -nostdlib or -nodefaultlibs.
+// With one, compiler-rt's builtins from the resource directory, libc.a from
+// the sysroot's lib/<triple> and the builtins again come after the inputs,
+// GCC's libgcc, libc, libgcc, since each calls the other and libbpf links an
+// archive against the references before it only; -nolibc leaves libc out,
+// and the builtins' second copy with it, -nostdlib and -nodefaultlibs all.
 
 // RUN: %clang -### --target=bpfel %s -o out.o 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK_SYSROOT %s
 // LINK_SYSROOT: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
-// LINK_SYSROOT: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+// LINK_SYSROOT: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a" "{{.*}}/share/bpf-sysroot/lib/bpfel-unknown-none/libc.a" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+
+// RUN: %clang -### --target=bpfel %s -o out.o -nolibc 2>&1 \
+// RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
+// RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
+// RUN:   | FileCheck --check-prefix=LINK_NOLIBC %s
+// LINK_NOLIBC: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
+// LINK_NOLIBC: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "{{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
 
 // RUN: %clang -### --target=bpfel %s -o out.o -nostdlib 2>&1 \
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
@@ -128,6 +138,30 @@
 // RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
 // RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
 // RUN:   | FileCheck --check-prefix=LINK %s
+
+// The builtins come from the sysroot's lib/<triple> when the resource
+// directory has none for the target, as a runtimes build with the sysroot as
+// its prefix installs them beside libc.a; -print-libgcc-file-name names the
+// same file.
+
+// RUN: %clang -### --target=bpfel %s -o out.o 2>&1 \
+// RUN:     --sysroot=%S/Inputs/bpf_runtimes_sysroot_tree \
+// RUN:     -resource-dir %S/Inputs/bpf_runtimes_sysroot_tree/resource \
+// RUN:   | FileCheck --check-prefix=LINK_RUNTIMES %s
+// LINK_RUNTIMES: "-cc1" {{.*}} "-o" "[[temp:[^"]*]]"
+// LINK_RUNTIMES: bpftool{{(\.exe)?}}" "gen" "object" "out.o" "[[temp]]" "[[ROOT:[^"]+]]/Inputs/bpf_runtimes_sysroot_tree/lib/bpfel-unknown-none/libclang_rt.builtins.a" "[[ROOT]]/Inputs/bpf_runtimes_sysroot_tree/lib/bpfel-unknown-none/libc.a" "[[ROOT]]/Inputs/bpf_runtimes_sysroot_tree/lib/bpfel-unknown-none/libclang_rt.builtins.a"{{$}}
+
+// RUN: %clang -print-libgcc-file-name --target=bpfel 2>&1 \
+// RUN:     --sysroot=%S/Inputs/bpf_runtimes_sysroot_tree \
+// RUN:     -resource-dir %S/Inputs/bpf_runtimes_sysroot_tree/resource \
+// RUN:   | FileCheck --check-prefix=LIBGCC_RUNTIMES %s
+// LIBGCC_RUNTIMES: {{.*}}/Inputs/bpf_runtimes_sysroot_tree/lib/bpfel-unknown-none/libclang_rt.builtins.a
+
+// RUN: %clang -print-libgcc-file-name --target=bpfel 2>&1 \
+// RUN:     -ccc-install-dir %S/Inputs/basic_bpf_sysroot_tree/bin \
+// RUN:     -resource-dir %S/Inputs/basic_bpf_sysroot_tree/resource \
+// RUN:   | FileCheck --check-prefix=LIBGCC_RESOURCE %s
+// LIBGCC_RESOURCE: {{.*}}/resource/lib/bpfel-unknown-none/libclang_rt.builtins.a
 
 // -l<name> is lib<name>.a from the -L directories, then the sysroot's
 // lib/<triple>, in its place among the inputs; one found nowhere is passed by

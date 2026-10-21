@@ -72,13 +72,17 @@ BPF::BPF(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
 
   // The base class named the per-target runtime directory after the triple
   // as it was spelled, which for --target=bpf is lib/bpf: use the canonical
-  // one, where compiler-rt's builtins are.
+  // one, where compiler-rt's builtins are, and after it the sysroot's
+  // per-target lib, where a runtimes build with the sysroot as its prefix
+  // installs them beside libc.a, so that a sysroot built apart from the
+  // compiler carries its own, as the AIX toolchain takes the sysroot's
+  // /usr/lib for the runtimes.
   SmallString<128> RuntimeDir(D.ResourceDir);
   llvm::sys::path::append(RuntimeDir, "lib", MultiarchTriple);
   getLibraryPaths().clear();
   getLibraryPaths().push_back(std::string(RuntimeDir));
 
-  // Where -l libraries and the C++ standard library are: the sysroot's
+  // Where -l libraries, libc and the C++ standard library are: the sysroot's
   // per-target lib, then the runtime directory. Nothing is taken from next to
   // the installation or the host.
   getFilePaths().clear();
@@ -86,6 +90,7 @@ BPF::BPF(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     SmallString<128> LibDir(SysRoot);
     llvm::sys::path::append(LibDir, "lib", MultiarchTriple);
     getFilePaths().push_back(std::string(LibDir));
+    getLibraryPaths().push_back(std::string(LibDir));
   }
   if (getVFS().exists(RuntimeDir))
     getFilePaths().push_back(std::string(RuntimeDir));
@@ -219,6 +224,9 @@ void BPF::AddCXXStdlibLibArgs(const ArgList &Args,
   if (Args.hasArg(options::OPT_fexperimental_library))
     CmdArgs.push_back(Args.MakeArgString(findLibrary("c++experimental", {})));
   CmdArgs.push_back(Args.MakeArgString(findLibrary("c++abi", {})));
+  // libc++abi's personality routine reads the landing pad context that
+  // libunwind keeps, as on every target it uses libunwind's _Unwind_*.
+  CmdArgs.push_back(Args.MakeArgString(findLibrary("unwind", {})));
 }
 
 /// bpftool next to clang, on PATH or from -B, like other tools; --ld-path=
@@ -300,13 +308,27 @@ void bpf::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.append(InputArgs);
 
   // The default libraries are the sysroot's: without one there is nothing
-  // to link but what was named. The C++ standard library when the driver is
-  // clang++, then compiler-rt's builtins from the resource directory.
-  if (!TC.getSysRoot().empty() &&
-      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
+  // to link but what was named. They follow the inputs in the order they
+  // depend on each other, since libbpf links an archive against the
+  // references before it only: the C++ standard library, its ABI library and
+  // the unwinding library when the driver is clang++, then compiler-rt's
+  // builtins, libc, and the builtins again, since the two call each other,
+  // libc the 128-bit division and the builtins malloc and memcpy for
+  // emulated TLS. That is GCC's link sequence, libgcc, libc, libgcc, and the
+  // GNU driver's, which lists the runtime libraries around -lc. -nostdlib++
+  // leaves out the first, -nolibc libc, -nostdlib and -nodefaultlibs all of
+  // them.
+  bool NoDefaultLibs =
+      Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
+  bool NoLibc = Args.hasArg(options::OPT_nolibc);
+  if (!TC.getSysRoot().empty() && !NoDefaultLibs) {
     if (TC.ShouldLinkCXXStdlib(Args))
       TC.AddCXXStdlibLibArgs(Args, CmdArgs);
     AddRunTimeLibs(TC, TC.getDriver(), CmdArgs, Args);
+    if (!NoLibc) {
+      CmdArgs.push_back(Args.MakeArgString(TC.findLibrary("c", {})));
+      AddRunTimeLibs(TC, TC.getDriver(), CmdArgs, Args);
+    }
   }
 
   C.addCommand(std::make_unique<Command>(JA, *this,
