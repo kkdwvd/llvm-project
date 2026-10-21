@@ -53,6 +53,51 @@ LIBC_ALWAYS_INLINE constexpr bool expects_bool_condition<bool>(bool value) {
 #error "Unhandled compiler"
 #endif
 
+// A loop's trip count on BPF must be one the kernel's verifier can bound. A
+// loop over a string, or over a count the caller chose, has no such bound,
+// and the verifier admits it only when an iteration can leave it through a
+// may_goto instruction, which the kernel takes after a budget of iterations.
+// LIBC_CAN_LOOP is that instruction as a loop condition, true until the budget
+// is spent: `for (; *src && LIBC_CAN_LOOP; ++src)`. It is the kernel's own
+// can_loop. Elsewhere, and in a constant evaluation, it is true.
+#if defined(LIBC_TARGET_ARCH_IS_BPF)
+namespace LIBC_NAMESPACE_DECL {
+namespace details {
+LIBC_ALWAYS_INLINE bool bpf_can_loop() {
+  __label__ loop_break, loop_continue;
+  bool ret = true;
+  asm volatile goto("may_goto %l[loop_break]" : : : : loop_break);
+  goto loop_continue;
+loop_break:
+  ret = false;
+loop_continue:;
+  return ret;
+}
+} // namespace details
+} // namespace LIBC_NAMESPACE_DECL
+#define LIBC_CAN_LOOP                                                          \
+  (__builtin_is_constant_evaluated() ? true                                    \
+                                     : LIBC_NAMESPACE::details::bpf_can_loop())
+// A loop counter that starts at a literal is a precise value to the
+// verifier, which then walks the loop one iteration per state up to its
+// limit; one that starts at a value loaded from memory is a number with
+// bounds, which one pass through a may_goto loop covers. LIBC_OPAQUE_ZERO is
+// zero loaded from memory on BPF: `for (size_t i = LIBC_OPAQUE_ZERO; ...)`.
+// Elsewhere, and in a constant evaluation, it is 0.
+namespace LIBC_NAMESPACE_DECL {
+namespace details {
+inline volatile unsigned long bpf_opaque_zero = 0;
+}
+} // namespace LIBC_NAMESPACE_DECL
+#define LIBC_OPAQUE_ZERO                                                       \
+  (__builtin_is_constant_evaluated()                                           \
+       ? 0                                                                     \
+       : static_cast<unsigned long>(LIBC_NAMESPACE::details::bpf_opaque_zero))
+#else
+#define LIBC_CAN_LOOP true
+#define LIBC_OPAQUE_ZERO 0
+#endif
+
 // Defining optimization options for math functions.
 // TODO: Exporting this to public generated headers?
 #define LIBC_MATH_SKIP_ACCURATE_PASS 0x01

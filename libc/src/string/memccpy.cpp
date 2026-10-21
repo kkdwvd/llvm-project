@@ -11,6 +11,7 @@
 #include "src/__support/common.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/macros/null_check.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 #include <stddef.h> // For size_t.
 
 namespace LIBC_NAMESPACE_DECL {
@@ -25,9 +26,9 @@ LLVM_LIBC_FUNCTION(void *, memccpy,
   unsigned char end = static_cast<unsigned char>(c);
   const unsigned char *uc_src = static_cast<const unsigned char *>(src);
   unsigned char *uc_dest = static_cast<unsigned char *>(dest);
-  size_t i = 0;
+  size_t i = LIBC_OPAQUE_ZERO;
   // Copy up until end is found.
-  for (; i < count && uc_src[i] != end; ++i)
+  for (; i < count && uc_src[i] != end && LIBC_CAN_LOOP; ++i)
     uc_dest[i] = uc_src[i];
   // if i < count, then end must have been found, so copy end into dest and
   // return the byte after.

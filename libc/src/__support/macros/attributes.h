@@ -180,8 +180,10 @@ LIBC_THREAD_MODE_EXTERNAL.
 #define LIBC_TRIVIAL_ABI
 #endif
 
+// BPF has no vector registers, so the compiler would scalarize every vector
+// operation, and no _BitInt, which simd.h keeps a vector's mask as.
 #if __has_attribute(ext_vector_type) &&                                        \
-    LIBC_HAS_FEATURE(ext_vector_type_boolean)
+    LIBC_HAS_FEATURE(ext_vector_type_boolean) && !defined(LIBC_TARGET_ARCH_IS_BPF)
 #define LIBC_HAS_VECTOR_TYPE 1
 #else
 #define LIBC_HAS_VECTOR_TYPE 0

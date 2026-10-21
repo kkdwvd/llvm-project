@@ -12,6 +12,7 @@
 #include "src/string/string_utils.h"
 
 #include "src/__support/common.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 
 namespace LIBC_NAMESPACE_DECL {
 
@@ -21,7 +22,7 @@ LLVM_LIBC_FUNCTION(char *, strcat,
   LIBC_CRASH_ON_NULLPTR(src);
   size_t dest_length = internal::string_length(dest);
   size_t i;
-  for (i = 0; src[i] != '\0'; ++i)
+  for (i = LIBC_OPAQUE_ZERO; src[i] != '\0' && LIBC_CAN_LOOP; ++i)
     dest[dest_length + i] = src[i];
 
   dest[dest_length + i] = '\0';

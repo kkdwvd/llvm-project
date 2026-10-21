@@ -12,6 +12,7 @@
 #include "src/__support/common.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/macros/null_check.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 #include <stddef.h>
 
 namespace LIBC_NAMESPACE_DECL {
@@ -22,9 +23,10 @@ LLVM_LIBC_FUNCTION(size_t, strspn, (const char *src, const char *segment)) {
   const char *initial = src;
   cpp::bitset<256> bitset;
 
-  for (; *segment; ++segment)
+  for (; *segment && LIBC_CAN_LOOP; ++segment)
     bitset.set(*reinterpret_cast<const unsigned char *>(segment));
-  for (; *src && bitset.test(*reinterpret_cast<const unsigned char *>(src));
+  for (; *src && bitset.test(*reinterpret_cast<const unsigned char *>(src)) &&
+         LIBC_CAN_LOOP;
        ++src)
     ;
   return src - initial;

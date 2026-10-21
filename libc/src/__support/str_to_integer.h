@@ -26,6 +26,7 @@
 #include "src/__support/str_to_num_result.h"
 #include "src/__support/uint128.h"
 #include "src/__support/wctype_utils.h"
+#include "src/__support/macros/optimization.h" // LIBC_CAN_LOOP
 
 namespace LIBC_NAMESPACE_DECL {
 namespace internal {
@@ -36,8 +37,9 @@ template <typename CharType>
 LIBC_INLINE constexpr size_t
 first_non_whitespace(const CharType *__restrict src,
                      size_t src_len = cpp::numeric_limits<size_t>::max()) {
-  size_t src_cur = 0;
-  for (; src_cur < src_len && internal::isspace(src[src_cur]); ++src_cur)
+  size_t src_cur = LIBC_OPAQUE_ZERO;
+  for (; src_cur < src_len && internal::isspace(src[src_cur]) && LIBC_CAN_LOOP;
+       ++src_cur)
     ;
   return src_cur;
 }
@@ -151,7 +153,7 @@ strtointeger(const CharType *__restrict src, int base,
   bool is_number = false;
   int error_val = 0;
   ResultType result = 0;
-  while (src_cur < src_len && isalnum(src[src_cur])) {
+  while (src_cur < src_len && isalnum(src[src_cur]) && LIBC_CAN_LOOP) {
     int cur_digit = b36_char_to_int(src[src_cur]);
     if (cur_digit >= base)
       break;

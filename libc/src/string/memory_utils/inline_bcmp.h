@@ -28,6 +28,9 @@
 #elif defined(LIBC_TARGET_ARCH_IS_ANY_RISCV)
 #include "src/string/memory_utils/riscv/inline_bcmp.h"
 #define LIBC_SRC_STRING_MEMORY_UTILS_BCMP inline_bcmp_riscv
+#elif defined(LIBC_TARGET_ARCH_IS_BPF)
+#include "src/string/memory_utils/bpf/inline_bcmp.h"
+#define LIBC_SRC_STRING_MEMORY_UTILS_BCMP inline_bcmp_bpf
 #else
 #include "src/string/memory_utils/generic/byte_per_byte.h"
 #define LIBC_SRC_STRING_MEMORY_UTILS_BCMP inline_bcmp_byte_per_byte
