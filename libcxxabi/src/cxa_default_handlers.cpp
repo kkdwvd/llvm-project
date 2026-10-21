@@ -92,6 +92,11 @@ static constinit const char* cause = "uncaught";
 
 static constexpr std::terminate_handler default_terminate_handler = demangling_terminate_handler;
 static constexpr std::terminate_handler default_unexpected_handler = demangling_unexpected_handler;
+#elif defined(__BPF__)
+// No libc abort() ends a BPF program: what std::terminate() does, which calls
+// no handler there (cxa_handlers.cpp), is the default handler too.
+static constexpr std::terminate_handler default_terminate_handler = __bpf_abort;
+static constexpr std::terminate_handler default_unexpected_handler = std::terminate;
 #else // !LIBCXXABI_SILENT_TERMINATE
 static constexpr std::terminate_handler default_terminate_handler = std::abort;
 static constexpr std::terminate_handler default_unexpected_handler = std::terminate;

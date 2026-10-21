@@ -14,7 +14,69 @@
 #include <typeinfo>
 #include <stddef.h>
 
+#if defined(__BPF__)
+#  include "bpf_platform.h"
+#endif
+
 namespace __cxxabiv1 {
+
+#if defined(__BPF__)
+
+// On BPF the runtime makes no virtual call: a call through a pointer loaded
+// from memory is checked by the kernel against every function whose address
+// the program stores, and the recursive searches below are refused outright.
+// The matching reads a type_info's kind from its vtable's type_info slot, as
+// typeid does, and walks a class graph without recursion on an explicit stack
+// (private_typeinfo_bpf.cpp). So each class has its destructor, its key
+// function, which emits its vtable and type_info, and the data members the
+// Itanium ABI gives it; can_catch is one function for every kind.
+
+class _LIBCXXABI_TYPE_VIS __shim_type_info : public std::type_info {
+public:
+  _LIBCXXABI_HIDDEN ~__shim_type_info() override;
+
+  // Whether a handler of this type catches an exception object of
+  // thrown_type at adjustedPtr, which is then what the handler gets:
+  // [except.handle]/3 as the virtual can_catch of the other targets has it.
+  _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info* thrown_type, void*& adjustedPtr) const noexcept;
+};
+
+// The global subprograms of private_typeinfo_bpf.cpp, which the verifier
+// checks once per program: the comparison of two type names, and the walks of
+// a class graph over a search's memory passed as a number (bpf_platform.h).
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long __libcxxabi_bpf_type_names_equal(unsigned long long a,
+                                                                                   unsigned long long b) noexcept;
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long __libcxxabi_bpf_find_public_base(
+    unsigned long long derived, unsigned long long object, unsigned long long base, unsigned long long memory) noexcept;
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long
+__libcxxabi_bpf_dynamic_cast_search(unsigned long long static_ptr, unsigned long long static_type,
+                                    unsigned long long dst_type, long long src2dst_offset,
+                                    unsigned long long memory) noexcept;
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long
+__libcxxabi_bpf_dynamic_cast(unsigned long long static_ptr, unsigned long long static_type,
+                             unsigned long long dst_type, long long src2dst_offset) noexcept;
+
+class _LIBCXXABI_TYPE_VIS __fundamental_type_info final : public __shim_type_info {
+public:
+  _LIBCXXABI_HIDDEN ~__fundamental_type_info() final;
+};
+
+class _LIBCXXABI_TYPE_VIS __array_type_info final : public __shim_type_info {
+public:
+  _LIBCXXABI_HIDDEN ~__array_type_info() final;
+};
+
+class _LIBCXXABI_TYPE_VIS __function_type_info final : public __shim_type_info {
+public:
+  _LIBCXXABI_HIDDEN ~__function_type_info() final;
+};
+
+class _LIBCXXABI_TYPE_VIS __enum_type_info final : public __shim_type_info {
+public:
+  _LIBCXXABI_HIDDEN ~__enum_type_info() final;
+};
+
+#else // __BPF__
 
 class _LIBCXXABI_TYPE_VIS __shim_type_info : public std::type_info {
 public:
@@ -49,6 +111,8 @@ public:
   _LIBCXXABI_HIDDEN ~__enum_type_info() final;
   _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info*, void*&) const final;
 };
+
+#endif // __BPF__
 
 enum
 {
@@ -136,6 +200,7 @@ class _LIBCXXABI_TYPE_VIS __class_type_info : public __shim_type_info {
 public:
   _LIBCXXABI_HIDDEN ~__class_type_info() override;
 
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN void process_static_type_above_dst(__dynamic_cast_info *,
                                                        const void *,
                                                        const void *, int) const;
@@ -149,6 +214,7 @@ public:
   search_below_dst(__dynamic_cast_info *, const void *, int, bool) const;
   _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info*, void*&) const final;
   _LIBCXXABI_HIDDEN virtual void has_unambiguous_public_base(catch_info*, void*, int) const;
+#endif
 };
 
 // Has one non-virtual public base class at offset zero
@@ -158,9 +224,11 @@ public:
 
   _LIBCXXABI_HIDDEN ~__si_class_type_info() final;
 
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN void search_above_dst(__dynamic_cast_info*, const void*, const void*, int, bool) const final;
   _LIBCXXABI_HIDDEN void search_below_dst(__dynamic_cast_info*, const void*, int, bool) const final;
   _LIBCXXABI_HIDDEN void has_unambiguous_public_base(catch_info*, void*, int) const final;
+#endif
 };
 
 struct _LIBCXXABI_HIDDEN __base_class_type_info
@@ -176,9 +244,11 @@ public:
         __offset_shift = 8
     };
 
+#if !defined(__BPF__)
     void search_above_dst(__dynamic_cast_info*, const void*, const void*, int, bool) const;
     void search_below_dst(__dynamic_cast_info*, const void*, int, bool) const;
     void has_unambiguous_public_base(catch_info*, void*, int) const;
+#endif
 };
 
 // Has one or more base classes
@@ -197,9 +267,11 @@ public:
 
   _LIBCXXABI_HIDDEN ~__vmi_class_type_info() final;
 
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN void search_above_dst(__dynamic_cast_info*, const void*, const void*, int, bool) const final;
   _LIBCXXABI_HIDDEN void search_below_dst(__dynamic_cast_info*, const void*, int, bool) const final;
   _LIBCXXABI_HIDDEN void has_unambiguous_public_base(catch_info*, void*, int) const final;
+#endif
 };
 
 class _LIBCXXABI_TYPE_VIS __pbase_type_info : public __shim_type_info {
@@ -231,14 +303,18 @@ public:
   };
 
   _LIBCXXABI_HIDDEN ~__pbase_type_info() override;
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info*, void*&) const override;
+#endif
 };
 
 class _LIBCXXABI_TYPE_VIS __pointer_type_info final : public __pbase_type_info {
 public:
   _LIBCXXABI_HIDDEN ~__pointer_type_info() final;
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info*, void*&) const final;
   _LIBCXXABI_HIDDEN bool can_catch_nested(const __shim_type_info*) const;
+#endif
 };
 
 class _LIBCXXABI_TYPE_VIS __pointer_to_member_type_info final : public __pbase_type_info {
@@ -246,8 +322,10 @@ public:
   _LIBCXXABI_DISABLE_POINTER_FIELD_PROTECTION const __class_type_info* __context;
 
   _LIBCXXABI_HIDDEN ~__pointer_to_member_type_info() final;
+#if !defined(__BPF__)
   _LIBCXXABI_HIDDEN bool can_catch(const __shim_type_info*, void*&) const final;
   _LIBCXXABI_HIDDEN bool can_catch_nested(const __shim_type_info*) const;
+#endif
 };
 
 }  // __cxxabiv1

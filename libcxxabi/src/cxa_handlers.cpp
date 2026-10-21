@@ -51,6 +51,18 @@ get_terminate() noexcept
 void
 __terminate(terminate_handler func) noexcept
 {
+#if defined(__BPF__)
+    // The handler is not called. A call through the stored pointer here would
+    // be a call through a number inside every destructor, which is noexcept,
+    // and the kernel refuses a function whose address a program stores, as a
+    // thrown object's destructor and every virtual function are, when it can
+    // make such a call itself, as recursion. The program ends as it would
+    // after the handler, through bpf_throw() (abort_message.cpp).
+    // TODO(kkd): kernel limitation. With verified calls through a pointer the
+    // handler is called as below.
+    (void)func;
+    __abort_message("terminating");
+#else
 #ifndef _LIBCXXABI_NO_EXCEPTIONS
     try
     {
@@ -66,6 +78,7 @@ __terminate(terminate_handler func) noexcept
         __abort_message("terminate_handler unexpectedly threw an exception");
     }
 #endif // _LIBCXXABI_NO_EXCEPTIONS
+#endif // __BPF__
 }
 
 [[noreturn]] void

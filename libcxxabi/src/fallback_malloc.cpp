@@ -8,6 +8,7 @@
 
 #include "fallback_malloc.h"
 #include "abort_message.h"
+#include "bpf_platform.h" // for _LIBCXXABI_CAN_LOOP
 
 #include <__thread/support.h>
 #ifndef _LIBCXXABI_HAS_NO_THREADS
@@ -16,7 +17,8 @@
 #endif
 #endif
 
-#include "include/aligned_alloc.h" // from libc++
+#include "include/aligned_alloc.h"   // from libc++
+#include "include/atomic_support.h" // from libc++
 #include <__assert>
 #include <stdlib.h> // for malloc, calloc, free
 #include <string.h> // for memset
@@ -34,7 +36,16 @@
 namespace {
 
 // When POSIX threads are not available, make the mutex operations a nop
-#ifndef _LIBCXXABI_HAS_NO_THREADS
+#if defined(__BPF__)
+// A BPF program has no threads, but it runs on every CPU of the kernel at
+// once, and the heap is one: a spin lock, taken with the exchange the
+// kernel's atomics give. A waiter spins within the verifier's loop budget
+// (bpf_platform.h), since the holder may be a program the waiter's own CPU
+// interrupted, which cannot run until the waiter returns; a waiter that
+// finds the budget spent does not have the lock, and its allocation fails
+// as one the heap cannot serve, or its release leaks the block.
+static constinit unsigned long heap_mutex = 0;
+#elif !defined(_LIBCXXABI_HAS_NO_THREADS)
 static constinit std::__libcpp_mutex_t heap_mutex = _LIBCPP_MUTEX_INITIALIZER;
 #else
 static constinit void* heap_mutex = 0;
@@ -42,24 +53,54 @@ static constinit void* heap_mutex = 0;
 
 class mutexor {
 public:
-#ifndef _LIBCXXABI_HAS_NO_THREADS
+#if defined(__BPF__)
+  mutexor(unsigned long* m) : mtx_(m), locked_(false) {
+    while (_LIBCXXABI_CAN_LOOP) {
+      // Tested before it is exchanged, so that waiters read the line the
+      // holder writes rather than take it from it on every spin.
+      if (std::__libcpp_atomic_load(mtx_, std::_AO_Relaxed) == 0 &&
+          std::__libcpp_atomic_exchange(mtx_, 1ul, std::_AO_Acquire) == 0) {
+        locked_ = true;
+        return;
+      }
+    }
+  }
+  ~mutexor() {
+    if (locked_)
+      std::__libcpp_atomic_store(mtx_, 0ul, std::_AO_Release);
+  }
+  bool locked() const { return locked_; }
+#elif !defined(_LIBCXXABI_HAS_NO_THREADS)
   mutexor(std::__libcpp_mutex_t* m) : mtx_(m) {
     std::__libcpp_mutex_lock(mtx_);
   }
   ~mutexor() { std::__libcpp_mutex_unlock(mtx_); }
+  bool locked() const { return true; }
 #else
   mutexor(void*) {}
   ~mutexor() {}
+  bool locked() const { return true; }
 #endif
 private:
   mutexor(const mutexor& rhs);
   mutexor& operator=(const mutexor& rhs);
-#ifndef _LIBCXXABI_HAS_NO_THREADS
+#if defined(__BPF__)
+  unsigned long* mtx_;
+  bool locked_;
+#elif !defined(_LIBCXXABI_HAS_NO_THREADS)
   std::__libcpp_mutex_t* mtx_;
 #endif
 };
 
+#if defined(__BPF__)
+// On BPF the reserve also serves the search a typed catch clause or a
+// dynamic_cast walks a class graph with when the allocator has nothing
+// (private_typeinfo_bpf.cpp): 1,608 bytes each, beside the exception's
+// header and object.
+static const size_t HEAP_SIZE = 16384;
+#else
 static const size_t HEAP_SIZE = 512;
+#endif
 char heap[HEAP_SIZE] __attribute__((aligned));
 
 typedef unsigned short heap_offset;
@@ -133,12 +174,14 @@ void* fallback_malloc(size_t len) {
   heap_node *p, *prev;
   const size_t nelems = alloc_size(len);
   mutexor mtx(&heap_mutex);
+  if (!mtx.locked())
+    return NULL; // the lock was not taken within the loop budget (BPF)
 
   if (NULL == freelist)
     init_heap();
 
   //  Walk the free list, looking for a "big enough" chunk
-  for (p = freelist, prev = 0; p && p != list_end;
+  for (p = freelist, prev = 0; p && p != list_end && _LIBCXXABI_CAN_LOOP;
        prev = p, p = node_from_offset(p->next_node)) {
 
     // Check the invariant that all heap_nodes pointers 'p' are aligned
@@ -192,12 +235,14 @@ void fallback_free(void* ptr) {
   struct heap_node *p, *prev;
 
   mutexor mtx(&heap_mutex);
+  if (!mtx.locked())
+    return; // the lock was not taken within the loop budget (BPF): leaked
 
 #ifdef DEBUG_FALLBACK_MALLOC
   std::printf("Freeing item at %d of size %d\n", offset_from_node(cp), cp->len);
 #endif
 
-  for (p = freelist, prev = 0; p && p != list_end;
+  for (p = freelist, prev = 0; p && p != list_end && _LIBCXXABI_CAN_LOOP;
        prev = p, p = node_from_offset(p->next_node)) {
 #ifdef DEBUG_FALLBACK_MALLOC
     std::printf("  p=%d, cp=%d, after(p)=%d, after(cp)=%d\n",
@@ -255,7 +300,39 @@ namespace __cxxabiv1 {
 
 struct __attribute__((aligned)) __aligned_type {};
 
-void* __aligned_malloc_with_fallback(size_t size) {
+#if defined(__BPF__)
+
+// The walks of the fallback heap are checked once per program, as global
+// subprograms taking and returning the numbers the addresses are
+// (bpf_platform.h), rather than at every throw site that may fall back.
+
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long __libcxxabi_bpf_aligned_malloc(unsigned long long size) noexcept {
+  if (size == 0)
+    size = 1;
+  if (void* dest = std::__libcpp_aligned_alloc(__alignof(__aligned_type), size))
+    return reinterpret_cast<unsigned long long>(dest);
+  return reinterpret_cast<unsigned long long>(fallback_malloc(size));
+}
+
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM void __libcxxabi_bpf_aligned_free(unsigned long long address) noexcept {
+  void* ptr = reinterpret_cast<void*>(address);
+  if (is_fallback_ptr(ptr))
+    fallback_free(ptr);
+  else
+    std::__libcpp_aligned_free(ptr);
+}
+
+void* __aligned_malloc_with_fallback(size_t size) noexcept {
+  return reinterpret_cast<void*>(__libcxxabi_bpf_aligned_malloc(size));
+}
+
+void __aligned_free_with_fallback(void* ptr) noexcept {
+  __libcxxabi_bpf_aligned_free(reinterpret_cast<unsigned long long>(ptr));
+}
+
+#else // __BPF__
+
+void* __aligned_malloc_with_fallback(size_t size) noexcept {
 #if defined(_WIN32)
   if (void* dest = std::__libcpp_aligned_alloc(alignof(__aligned_type), size))
     return dest;
@@ -271,7 +348,7 @@ void* __aligned_malloc_with_fallback(size_t size) {
   return fallback_malloc(size);
 }
 
-void* __calloc_with_fallback(size_t count, size_t size) {
+void* __calloc_with_fallback(size_t count, size_t size) noexcept {
   void* ptr = ::calloc(count, size);
   if (NULL != ptr)
     return ptr;
@@ -282,7 +359,7 @@ void* __calloc_with_fallback(size_t count, size_t size) {
   return ptr;
 }
 
-void __aligned_free_with_fallback(void* ptr) {
+void __aligned_free_with_fallback(void* ptr) noexcept {
   if (is_fallback_ptr(ptr))
     fallback_free(ptr);
   else {
@@ -294,7 +371,9 @@ void __aligned_free_with_fallback(void* ptr) {
   }
 }
 
-void __free_with_fallback(void* ptr) {
+#endif // __BPF__
+
+void __free_with_fallback(void* ptr) noexcept {
   if (is_fallback_ptr(ptr))
     fallback_free(ptr);
   else
