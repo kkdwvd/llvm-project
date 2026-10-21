@@ -17,6 +17,8 @@
 #include <typeinfo>
 
 #include "__cxxabi_config.h"
+#include "abort_message.h"
+#include "bpf_platform.h"
 #include "cxa_exception.h"
 #include "cxa_handlers.h"
 #include "private_typeinfo.h"
@@ -106,7 +108,7 @@ extern "C" EXCEPTION_DISPOSITION _GCC_specific_handler(PEXCEPTION_RECORD,
 +------------------+--+-----+-----+------------------------+--------------------------+
 | callSiteTableLength | (ULEB128) | Call Site Table length, used to find Action table |
 +---------------------+-----------+---------------------------------------------------+
-#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__)
+#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__) && !defined(__BPF__)
 +---------------------+-----------+------------------------------------------------+
 | Beginning of Call Site Table            The current ip lies within the           |
 | ...                                     (start, length) range of one of these    |
@@ -120,7 +122,7 @@ extern "C" EXCEPTION_DISPOSITION _GCC_specific_handler(PEXCEPTION_RECORD,
 | +-------------+---------------------------------+------------------------------+ |
 | ...                                                                              |
 +----------------------------------------------------------------------------------+
-#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
 +---------------------+-----------+------------------------------------------------+
 | Beginning of Call Site Table            The current ip is a 1-based index into   |
 | ...                                     this table.  Or it is -1 meaning no      |
@@ -133,7 +135,7 @@ extern "C" EXCEPTION_DISPOSITION _GCC_specific_handler(PEXCEPTION_RECORD,
 | +-------------+---------------------------------+------------------------------+ |
 | ...                                                                              |
 +----------------------------------------------------------------------------------+
-#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
 +---------------------------------------------------------------------+
 | Beginning of Action Table       ttypeIndex == 0 : cleanup           |
 | ...                             ttypeIndex  > 0 : catch             |
@@ -243,7 +245,11 @@ uintptr_t
 readULEB128(const uint8_t** data)
 {
     uintptr_t result = 0;
-    uintptr_t shift = 0;
+    // From an opaque zero on BPF, as the port's loop counters start, and
+    // bounded below by the width of the result: a range the verifier follows
+    // to convergence, where the shift's growth alone it could not
+    // (bpf_platform.h). A value of more than 10 bytes is malformed.
+    uintptr_t shift = _LIBCXXABI_OPAQUE_ZERO;
     unsigned char byte;
     const uint8_t *p = *data;
     do
@@ -251,7 +257,7 @@ readULEB128(const uint8_t** data)
         byte = *p++;
         result |= static_cast<uintptr_t>(byte & 0x7F) << shift;
         shift += 7;
-    } while (byte & 0x80);
+    } while ((byte & 0x80) && shift < (sizeof(result) << 3) && _LIBCXXABI_CAN_LOOP);
     *data = p;
     return result;
 }
@@ -266,7 +272,11 @@ intptr_t
 readSLEB128(const uint8_t** data)
 {
     uintptr_t result = 0;
-    uintptr_t shift = 0;
+    // From an opaque zero on BPF, as the port's loop counters start, and
+    // bounded below by the width of the result: a range the verifier follows
+    // to convergence, where the shift's growth alone it could not
+    // (bpf_platform.h). A value of more than 10 bytes is malformed.
+    uintptr_t shift = _LIBCXXABI_OPAQUE_ZERO;
     unsigned char byte;
     const uint8_t *p = *data;
     do
@@ -274,7 +284,7 @@ readSLEB128(const uint8_t** data)
         byte = *p++;
         result |= static_cast<uintptr_t>(byte & 0x7F) << shift;
         shift += 7;
-    } while (byte & 0x80);
+    } while ((byte & 0x80) && shift < (sizeof(result) << 3) && _LIBCXXABI_CAN_LOOP);
     *data = p;
     if ((byte & 0x40) && (shift < (sizeof(result) << 3)))
         result |= static_cast<uintptr_t>(~0) << shift;
@@ -328,8 +338,7 @@ readEncodedPointer(const uint8_t** data, uint8_t encoding, uintptr_t base = 0)
         break;
     default:
         // not supported
-        abort();
-        break;
+        __abort_message("unsupported DWARF encoding in the exception table");
     }
     // then add relative offset
     switch (encoding & 0x70)
@@ -351,8 +360,7 @@ readEncodedPointer(const uint8_t** data, uint8_t encoding, uintptr_t base = 0)
     case DW_EH_PE_aligned:
     default:
         // not supported
-        abort();
-        break;
+        __abort_message("unsupported DWARF encoding in the exception table");
     }
     // then apply indirection
     if (result && (encoding & DW_EH_PE_indirect))
@@ -529,7 +537,7 @@ exception_spec_can_catch(int64_t specIndex, const uint8_t* classInfo,
     const uint8_t* temp = classInfo + specIndex;
     // If any type in the spec list can catch excpType, return false, else return true
     //    adjustments to adjustedPtr are ignored.
-    while (true)
+    while (_LIBCXXABI_CAN_LOOP)
     {
         uint64_t ttypeIndex = readULEB128(&temp);
         if (ttypeIndex == 0)
@@ -588,7 +596,7 @@ void
 set_registers(_Unwind_Exception* unwind_exception, _Unwind_Context* context,
               const scan_results& results)
 {
-#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__)
+#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__) || defined(__BPF__)
 #define __builtin_eh_return_data_regno(regno) regno
 #elif defined(__ibmxl__)
 // IBM xlclang++ compiler does not support __builtin_eh_return_data_regno.
@@ -699,7 +707,7 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
     // Get beginning current frame's code (as defined by the
     // emitted dwarf code)
     uintptr_t funcStart = _Unwind_GetRegionStart(context);
-#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__)
+#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__) || defined(__BPF__)
     if (ip == uintptr_t(-1))
     {
         // no action
@@ -709,9 +717,9 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
     else if (ip == 0)
         call_terminate(native_exception, unwind_exception);
     // ip is 1-based index into call site table
-#else  // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__
+#else  // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__ && !__BPF__
     uintptr_t ipOffset = ip - funcStart;
-#endif // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__
+#endif // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__ && !__BPF__
     const uint8_t* classInfo = NULL;
     // Note: See JITDwarfEmitter::EmitExceptionTable(...) for corresponding
     //       dwarf emission
@@ -732,18 +740,19 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
     // Walk call-site table looking for range that
     // includes current PC.
     uint8_t callSiteEncoding = *lsda++;
-#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__)
-    (void)callSiteEncoding;  // When using SjLj/Wasm exceptions, callSiteEncoding is never used
+#if defined(__USING_SJLJ_EXCEPTIONS__) || defined(__WASM_EXCEPTIONS__) || defined(__BPF__)
+    (void)callSiteEncoding;  // When using SjLj/Wasm/BPF exceptions, callSiteEncoding is never used
+    (void)lpStart;           // and neither is lpStart
 #endif
     uint32_t callSiteTableLength = static_cast<uint32_t>(readULEB128(&lsda));
     const uint8_t* callSiteTableStart = lsda;
     const uint8_t* callSiteTableEnd = callSiteTableStart + callSiteTableLength;
     const uint8_t* actionTableStart = callSiteTableEnd;
     const uint8_t* callSitePtr = callSiteTableStart;
-    while (callSitePtr < callSiteTableEnd)
+    while (callSitePtr < callSiteTableEnd && _LIBCXXABI_CAN_LOOP)
     {
         // There is one entry per call site.
-#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__)
+#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__) && !defined(__BPF__)
         // The call sites are non-overlapping in [start, start+length)
         // The call sites are ordered in increasing value of start
         uintptr_t start = readEncodedPointer(&callSitePtr, callSiteEncoding);
@@ -751,15 +760,15 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
         landing_pad_t landingPad = readEncodedPointer(&callSitePtr, callSiteEncoding);
         uintptr_t actionEntry = readULEB128(&callSitePtr);
         if ((start <= ipOffset) && (ipOffset < (start + length)))
-#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
         // ip is 1-based index into this table
         landing_pad_t landingPad = readULEB128(&callSitePtr);
         uintptr_t actionEntry = readULEB128(&callSitePtr);
         if (--ip == 0)
-#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
         {
             // Found the call site containing ip.
-#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__)
+#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__) && !defined(__BPF__)
             if (landingPad == 0)
             {
                 // No handler here
@@ -767,9 +776,9 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
                 return;
             }
             landingPad = (uintptr_t)lpStart + landingPad;
-#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#else  // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
             ++landingPad;
-#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__
+#endif // __USING_SJLJ_EXCEPTIONS__ || __WASM_EXCEPTIONS__ || __BPF__
             results.landingPad = landingPad;
             if (actionEntry == 0)
             {
@@ -781,7 +790,7 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
             const uint8_t* action = actionTableStart + (actionEntry - 1);
             bool hasCleanup = false;
             // Scan action entries until you find a matching handler, cleanup, or the end of action list
-            while (true)
+            while (_LIBCXXABI_CAN_LOOP)
             {
                 const uint8_t* actionRecord = action;
                 int64_t ttypeIndex = readSLEB128(&action);
@@ -894,8 +903,10 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
                 // Go to next action
                 action += actionOffset;
             }  // there is no break out of this loop, only return
+            // The loop's budget is spent on BPF: the table cannot be read.
+            call_terminate(native_exception, unwind_exception);
         }
-#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__)
+#if !defined(__USING_SJLJ_EXCEPTIONS__) && !defined(__WASM_EXCEPTIONS__) && !defined(__BPF__)
         else if (ipOffset < start)
         {
             // There is no call site for this ip
@@ -903,7 +914,7 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
             // Possible stack corruption.
             call_terminate(native_exception, unwind_exception);
         }
-#endif // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__
+#endif // !__USING_SJLJ_EXCEPTIONS__ && !__WASM_EXCEPTIONS__ && !__BPF__
     }  // there might be some tricky cases which break out of this loop
 
     // It is possible that no eh table entry specify how to handle
@@ -1011,7 +1022,7 @@ static inline void get_landing_pad(__cxa_catch_temp_type &dest,
 #endif
 }
 
-#if (defined(__SEH__) && !defined(__USING_SJLJ_EXCEPTIONS__)) || defined(__WASM_EXCEPTIONS__)
+#if (defined(__SEH__) && !defined(__USING_SJLJ_EXCEPTIONS__)) || defined(__WASM_EXCEPTIONS__) || defined(__BPF__)
 static _Unwind_Reason_Code __gxx_personality_imp
 #else
 _LIBCXXABI_FUNC_VIS _Unwind_Reason_Code
@@ -1077,9 +1088,9 @@ __gxx_personality_v0
             exc->languageSpecificData = results.languageSpecificData;
             get_landing_pad(exc->catchTemp, results);
             exc->adjustedPtr = results.adjustedPtr;
-#ifdef __WASM_EXCEPTIONS__
-            // Wasm only uses a single phase (_UA_SEARCH_PHASE), so save the
-            // results here.
+#if defined(__WASM_EXCEPTIONS__) || defined(__BPF__)
+            // Wasm and BPF only use a single phase (_UA_SEARCH_PHASE), so
+            // save the results here.
             set_registers(unwind_exception, context, results);
 #endif
         }
@@ -1125,6 +1136,36 @@ extern "C" _LIBCXXABI_FUNC_VIS _Unwind_Reason_Code __gxx_wasm_personality_v0(voi
   // only do the search phase.
   return __gxx_personality_imp(
       1, _UA_SEARCH_PHASE, exception_object->exception_class, exception_object, (struct _Unwind_Context*)context);
+}
+#endif
+
+#ifdef __BPF__
+// The scan as a global subprogram taking the numbers its pointers are, so that
+// the verifier checks it once per program rather than at every landing pad
+// that calls the personality (bpf_platform.h). noexcept, as the pad calls the
+// personality: a call that may unwind would need an unwind_goto after it.
+_LIBCXXABI_BPF_GLOBAL_SUBPROGRAM unsigned long long
+__libcxxabi_bpf_personality(unsigned long long exception_object, unsigned long long context) noexcept {
+  _Unwind_Exception* unwind_exception = reinterpret_cast<_Unwind_Exception*>(exception_object);
+  // BPF does not have two-phase unwinding, so we only do the search phase.
+  return __gxx_personality_imp(1, _UA_SEARCH_PHASE, unwind_exception->exception_class, unwind_exception,
+                               reinterpret_cast<_Unwind_Context*>(context));
+}
+
+// What a landing pad with catch clauses for types calls, with the exception
+// object, as a Wasm catch calls __gxx_wasm_personality_v0: the pad stored its
+// index and its function's LSDA in the landing pad context (libunwind's
+// Unwind-bpf.c) and reads the selector back from it. Returns int, the type
+// the compiler declares a personality routine with, since the compiler, not a
+// header, describes this declaration for BTF.
+extern "C" _LIBCXXABI_FUNC_VIS int __gxx_bpf_personality_v0(void* exception_ptr) noexcept {
+  struct _Unwind_LandingPadContext* context = _Unwind_GetBPFLPadContext();
+
+  // Reset the selector.
+  context->selector = 0;
+
+  return static_cast<int>(__libcxxabi_bpf_personality(reinterpret_cast<unsigned long long>(exception_ptr),
+                                                      reinterpret_cast<unsigned long long>(context)));
 }
 #endif
 

@@ -26,6 +26,27 @@ if (LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS)
   )
 endif()
 
+if (LLVM_DEFAULT_TARGET_TRIPLE MATCHES "^bpf")
+  set(LIBCXXABI_BPF ON)
+  # BPF programs run under the kernel's verifier: no recursion, loops it can
+  # bound, 512-byte frames, and no virtual call in the runtime. The demangler
+  # is a recursive descent parser whose frames exceed the stack ("the BPF
+  # stack limit is exceeded", cxa_demangle.cpp), and the type_info searches
+  # recurse through virtual functions: the matching of a catch clause and
+  # dynamic_cast walk a class graph without recursion instead, in
+  # private_typeinfo_bpf.cpp. Without threads cxa_thread_atexit.cpp is empty,
+  # and libbpf's linker takes no object without BTF.
+  list(REMOVE_ITEM LIBCXXABI_SOURCES
+    cxa_demangle.cpp
+    cxa_thread_atexit.cpp
+    private_typeinfo.cpp
+    )
+  list(APPEND LIBCXXABI_SOURCES
+    bpf_platform.cpp
+    private_typeinfo_bpf.cpp
+    )
+endif()
+
 if (LIBCXXABI_ENABLE_EXCEPTIONS)
   list(APPEND LIBCXXABI_SOURCES
     cxa_exception.cpp

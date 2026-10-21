@@ -18,6 +18,7 @@
 #include <new>       // for std::bad_array_new_length
 
 #include "abort_message.h"
+#include "bpf_platform.h" // for _LIBCXXABI_CAN_LOOP and _LIBCXXABI_OPAQUE_ZERO
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
@@ -241,7 +242,7 @@ _LIBCXXABI_FUNC_VIS void __cxa_vec_cctor(void *dest_array, void *src_array,
         char *dest_ptr = static_cast<char *>(dest_array);
         st_cxa_cleanup cleanup ( dest_array, idx, element_size, destructor );
 
-        for ( idx = 0; idx < element_count;
+        for ( idx = _LIBCXXABI_OPAQUE_ZERO; idx < element_count && _LIBCXXABI_CAN_LOOP;
                     ++idx, src_ptr += element_size, dest_ptr += element_size )
             constructor ( dest_ptr, src_ptr );
         cleanup.release ();     // We're good!
@@ -265,7 +266,7 @@ __cxa_vec_ctor(void *array_address, size_t element_count, size_t element_size,
         st_cxa_cleanup cleanup ( array_address, idx, element_size, destructor );
 
     //  Construct the elements
-        for ( idx = 0; idx < element_count; ++idx, ptr += element_size )
+        for ( idx = _LIBCXXABI_OPAQUE_ZERO; idx < element_count && _LIBCXXABI_CAN_LOOP; ++idx, ptr += element_size )
             constructor ( ptr );
         cleanup.release ();     // We're good!
     }
@@ -289,7 +290,7 @@ _LIBCXXABI_FUNC_VIS void __cxa_vec_dtor(void *array_address,
             st_terminate exception_guard (__cxa_uncaught_exception ());
             ptr +=  element_count * element_size;   // one past the last element
 
-            while ( idx-- > 0 ) {
+            while ( idx-- > 0 && _LIBCXXABI_CAN_LOOP ) {
                 ptr -= element_size;
                 destructor ( ptr );
             }
@@ -313,7 +314,7 @@ _LIBCXXABI_FUNC_VIS void __cxa_vec_cleanup(void *array_address,
         st_terminate exception_guard;
 
         ptr += element_count * element_size;    // one past the last element
-        while ( idx-- > 0 ) {
+        while ( idx-- > 0 && _LIBCXXABI_CAN_LOOP ) {
             ptr -= element_size;
             destructor ( ptr );
             }

@@ -14,13 +14,16 @@
 
 #include <__thread/support.h>
 
-#if defined(_LIBCXXABI_HAS_NO_THREADS)
+// A BPF program is built without threads but runs on every CPU at once, and
+// its thread_local is per CPU, through emulated TLS: the state is thread-local
+// there as it is where there are threads, not one for the program.
+#if defined(_LIBCXXABI_HAS_NO_THREADS) && !defined(__BPF__)
 
 namespace __cxxabiv1 {
 extern "C" {
     static __cxa_eh_globals eh_globals;
-    __cxa_eh_globals *__cxa_get_globals() { return &eh_globals; }
-    __cxa_eh_globals *__cxa_get_globals_fast() { return &eh_globals; }
+    __cxa_eh_globals *__cxa_get_globals() noexcept { return &eh_globals; }
+    __cxa_eh_globals *__cxa_get_globals_fast() noexcept { return &eh_globals; }
 } // extern "C"
 } // namespace __cxxabiv1
 
@@ -35,8 +38,8 @@ namespace {
 } // namespace
 
 extern "C" {
-    __cxa_eh_globals *__cxa_get_globals() { return __globals(); }
-    __cxa_eh_globals *__cxa_get_globals_fast() { return __globals(); }
+    __cxa_eh_globals *__cxa_get_globals() noexcept { return __globals(); }
+    __cxa_eh_globals *__cxa_get_globals_fast() noexcept { return __globals(); }
 } // extern "C"
 } // namespace __cxxabiv1
 
@@ -71,7 +74,7 @@ namespace {
 } // namespace
 
 extern "C" {
-    __cxa_eh_globals *__cxa_get_globals() {
+    __cxa_eh_globals *__cxa_get_globals() noexcept {
         // Try to get the globals for this thread
         __cxa_eh_globals *retVal = __cxa_get_globals_fast();
 
@@ -91,7 +94,7 @@ extern "C" {
     // preceded by a call to __cxa_get_globals().  This is an extension
     // to the Itanium ABI and is taken advantage of in several places in
     // libc++abi.
-    __cxa_eh_globals *__cxa_get_globals_fast() {
+    __cxa_eh_globals *__cxa_get_globals_fast() noexcept {
         // First time through, create the key.
         if (0 != std::__libcpp_execute_once(&flag_, construct_))
             __abort_message("execute once failure in __cxa_get_globals_fast()");

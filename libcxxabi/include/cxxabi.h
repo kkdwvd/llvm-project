@@ -37,6 +37,9 @@ class type_info; // forward declaration
 namespace __cxxabiv1 {
 
 struct __cxa_exception;
+#if defined(__BPF__)
+class __class_type_info;
+#endif
 
 extern "C"  {
 
@@ -68,7 +71,16 @@ extern _LIBCXXABI_FUNC_VIS void *
 __cxa_get_exception_ptr(void *exceptionObject) _LIBCXXABI_NOEXCEPT;
 extern _LIBCXXABI_FUNC_VIS void *
 __cxa_begin_catch(void *exceptionObject) _LIBCXXABI_NOEXCEPT;
+#if defined(__BPF__)
+// noexcept, where the destructor of a thrown object that throws would leave
+// through the handler's own landing pad: a call that may throw is followed by
+// an unwind_goto on BPF, which the verifier walks at the end of every handler.
+// The program terminates instead, as it does on every target when the
+// destructor of a thrown object throws while unwinding.
+extern _LIBCXXABI_FUNC_VIS void __cxa_end_catch() _LIBCXXABI_NOEXCEPT;
+#else
 extern _LIBCXXABI_FUNC_VIS void __cxa_end_catch();
+#endif
 #if defined(_LIBCXXABI_ARM_EHABI)
 extern _LIBCXXABI_FUNC_VIS bool
 __cxa_begin_cleanup(void *exceptionObject) _LIBCXXABI_NOEXCEPT;
@@ -89,6 +101,14 @@ extern _LIBCXXABI_FUNC_VIS std::type_info *__cxa_current_exception_type();
 [[__noreturn__]] extern _LIBCXXABI_FUNC_VIS void __cxa_bad_typeid(void);
 [[__noreturn__]] extern _LIBCXXABI_FUNC_VIS void
 __cxa_throw_bad_array_new_length(void);
+
+#if defined(__BPF__)
+// 2.9.7 The run-time check of dynamic_cast, declared here because libbpf links
+// the call the compiler makes with the definition through the types of a
+// declaration the unit has, as it does for the exception functions above.
+extern _LIBCXXABI_FUNC_VIS const void *
+__dynamic_cast(const void *sub, const __class_type_info *src, const __class_type_info *dst, ptrdiff_t src2dst_offset);
+#endif
 
 // 3.2.6 Pure Virtual Function API
 [[__noreturn__]] extern _LIBCXXABI_FUNC_VIS void __cxa_pure_virtual(void);

@@ -78,7 +78,7 @@ size_t cxa_exception_size_from_exception_thrown_size(size_t size) {
                                    alignof(__cxa_exception));
 }
 
-void __setExceptionClass(_Unwind_Exception* unwind_exception, uint64_t newValue) {
+void __setExceptionClass(_Unwind_Exception* unwind_exception, uint64_t newValue) noexcept {
     ::memcpy(&unwind_exception->exception_class, &newValue, sizeof(newValue));
 }
 
@@ -92,7 +92,7 @@ static void setDependentExceptionClass(_Unwind_Exception* unwind_exception) {
 }
 
 //  Is it one of ours?
-uint64_t __getExceptionClass(const _Unwind_Exception* unwind_exception) {
+uint64_t __getExceptionClass(const _Unwind_Exception* unwind_exception) noexcept {
     // On x86 and some ARM unwinders, unwind_exception->exception_class is
     // a uint64_t. On other ARM unwinders, it is a char[8].
     // See: http://infocenter.arm.com/help/topic/com.arm.doc.ihi0038b/IHI0038B_ehabi.pdf
@@ -102,7 +102,7 @@ uint64_t __getExceptionClass(const _Unwind_Exception* unwind_exception) {
     return exClass;
 }
 
-bool __isOurExceptionClass(const _Unwind_Exception* unwind_exception) {
+bool __isOurExceptionClass(const _Unwind_Exception* unwind_exception) noexcept {
     return (__getExceptionClass(unwind_exception) & get_vendor_and_language) ==
            (kOurExceptionClass                    & get_vendor_and_language);
 }
@@ -121,12 +121,20 @@ static inline  int decrementHandlerCount(__cxa_exception *exception) {
     return --exception->handlerCount;
 }
 
+
+#if !defined(__BPF__)
 /*
     If reason isn't _URC_FOREIGN_EXCEPTION_CAUGHT, then the terminateHandler
     stored in exc is called.  Otherwise the exceptionDestructor stored in
     exc is called, and then the memory for the exception is deallocated.
 
     This is never called for a __cxa_dependent_exception.
+
+    On BPF the header carries no cleanup: there is no unwinder to hand the
+    exception to a foreign runtime, so nothing would ever call it, and the
+    kernel checks every function whose address a program stores as a possible
+    callee of a call through a pointer, where this one, reaching the
+    destructor call in __cxa_decrement_exception_refcount, is refused.
 */
 static
 void
@@ -139,6 +147,7 @@ exception_cleanup_func(_Unwind_Reason_Code reason, _Unwind_Exception* unwind_exc
     //    check the reference count and only destroy this if that count goes to zero.
     __cxa_decrement_exception_refcount(unwind_exception + 1);
 }
+#endif // !__BPF__
 
 [[noreturn]] static void failed_throw(__cxa_exception* exception_header) {
 //  Section 2.5.3 says:
@@ -222,7 +231,9 @@ __cxa_exception* __cxa_init_primary_exception(void* object, std::type_info* tinf
   exception_header->exceptionType = tinfo;
   exception_header->exceptionDestructor = dest;
   setOurExceptionClass(&exception_header->unwindHeader);
+#if !defined(__BPF__)
   exception_header->unwindHeader.exception_cleanup = exception_cleanup_func;
+#endif
 
   return exception_header;
 }
@@ -230,7 +241,7 @@ __cxa_exception* __cxa_init_primary_exception(void* object, std::type_info* tinf
 //  This function shall allocate a __cxa_dependent_exception and
 //  return a pointer to it. (Really to the object, not past its end).
 //  Otherwise, it will work like __cxa_allocate_exception.
-void * __cxa_allocate_dependent_exception () {
+void * __cxa_allocate_dependent_exception () noexcept {
     size_t actual_size = sizeof(__cxa_dependent_exception);
     void *ptr = __aligned_malloc_with_fallback(actual_size);
     if (NULL == ptr)
@@ -242,7 +253,7 @@ void * __cxa_allocate_dependent_exception () {
 
 //  This function shall free a dependent_exception.
 //  It does not affect the reference count of the primary exception.
-void __cxa_free_dependent_exception (void * dependent_exception) {
+void __cxa_free_dependent_exception (void * dependent_exception) noexcept {
     __aligned_free_with_fallback(dependent_exception);
 }
 
@@ -517,7 +528,11 @@ For a foreign exception:
 * If it has been rethrown, there is nothing to do.
 * Otherwise delete the exception and pop the catch stack to empty.
 */
+#if defined(__BPF__)
+void __cxa_end_catch() noexcept { // as cxxabi.h declares it on BPF
+#else
 void __cxa_end_catch() {
+#endif
   static_assert(sizeof(__cxa_exception) == sizeof(__cxa_dependent_exception),
                 "sizeof(__cxa_exception) must be equal to "
                 "sizeof(__cxa_dependent_exception)");
@@ -730,11 +745,14 @@ void *__cxa_current_primary_exception() throw() {
     return thrown_object;
 }
 
+#if !defined(__BPF__)
 /*
     If reason isn't _URC_FOREIGN_EXCEPTION_CAUGHT, then the terminateHandler
     stored in exc is called.  Otherwise the referenceCount stored in the
     primary exception is decremented, destroying the primary if necessary.
     Finally the dependent exception is destroyed.
+
+    Not on BPF, as exception_cleanup_func above.
 */
 static
 void
@@ -747,6 +765,7 @@ dependent_exception_cleanup(_Unwind_Reason_Code reason, _Unwind_Exception* unwin
     __cxa_decrement_exception_refcount(dep_exception_header->primaryException);
     __cxa_free_dependent_exception(dep_exception_header);
 }
+#endif // !__BPF__
 
 /*
     If thrown_object is not null, allocate, initialize and throw a dependent
@@ -769,7 +788,9 @@ __cxa_rethrow_primary_exception(void* thrown_object)
         dep_exception_header->terminateHandler = std::get_terminate();
         setDependentExceptionClass(&dep_exception_header->unwindHeader);
         __cxa_get_globals()->uncaughtExceptions += 1;
+#if !defined(__BPF__)
         dep_exception_header->unwindHeader.exception_cleanup = dependent_exception_cleanup;
+#endif
 #ifdef __USING_SJLJ_EXCEPTIONS__
         _Unwind_SjLj_RaiseException(&dep_exception_header->unwindHeader);
 #else

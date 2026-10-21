@@ -6,10 +6,24 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "abort_message.h"
+
+#if defined(__BPF__)
+
+// No libc abort() ends a BPF program, and nothing prints: the one way out is
+// the kernel's bpf_throw(), which discards every frame and returns its cookie
+// from the program. It runs no destructor, so the verifier refuses it where a
+// frame still holds a lock, a reference or interrupts off; a program that may
+// terminate there loads with the work-in-progress BPF_F_THROW_NO_RELEASE.
+#  include "bpf_platform.h"
+
+void __bpf_abort(void) noexcept { bpf_throw(0); }
+
+#else // __BPF__
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include "abort_message.h"
 
 #ifdef __BIONIC__
 #  include <syslog.h>
@@ -65,3 +79,5 @@ void __abort_message(const char* format, ...)
 
     abort();
 }
+
+#endif // __BPF__

@@ -17,15 +17,19 @@
 #include "cxxabi.h"
 #include "unwind.h"
 
+#if defined(__BPF__)
+#  include "bpf_platform.h"
+#endif
+
 namespace __cxxabiv1 {
 
 static const uint64_t kOurExceptionClass          = 0x434C4E47432B2B00; // CLNGC++\0
 static const uint64_t kOurDependentExceptionClass = 0x434C4E47432B2B01; // CLNGC++\1
 static const uint64_t get_vendor_and_language     = 0xFFFFFFFFFFFFFF00; // mask for CLNGC++
 
-_LIBCXXABI_HIDDEN uint64_t __getExceptionClass  (const _Unwind_Exception*);
-_LIBCXXABI_HIDDEN void     __setExceptionClass  (      _Unwind_Exception*, uint64_t);
-_LIBCXXABI_HIDDEN bool     __isOurExceptionClass(const _Unwind_Exception*);
+_LIBCXXABI_HIDDEN uint64_t __getExceptionClass  (const _Unwind_Exception*) _LIBCXXABI_NOEXCEPT;
+_LIBCXXABI_HIDDEN void     __setExceptionClass  (      _Unwind_Exception*, uint64_t) _LIBCXXABI_NOEXCEPT;
+_LIBCXXABI_HIDDEN bool     __isOurExceptionClass(const _Unwind_Exception*) _LIBCXXABI_NOEXCEPT;
 
 struct _LIBCXXABI_HIDDEN __cxa_exception {
 #if defined(__LP64__) || defined(_WIN64) || defined(_LIBCXXABI_ARM_EHABI)
@@ -160,11 +164,11 @@ struct _LIBCXXABI_HIDDEN __cxa_eh_globals {
 #endif
 };
 
-extern "C" _LIBCXXABI_FUNC_VIS __cxa_eh_globals * __cxa_get_globals      ();
-extern "C" _LIBCXXABI_FUNC_VIS __cxa_eh_globals * __cxa_get_globals_fast ();
+extern "C" _LIBCXXABI_FUNC_VIS __cxa_eh_globals * __cxa_get_globals      () _LIBCXXABI_NOEXCEPT;
+extern "C" _LIBCXXABI_FUNC_VIS __cxa_eh_globals * __cxa_get_globals_fast () _LIBCXXABI_NOEXCEPT;
 
-extern "C" _LIBCXXABI_FUNC_VIS void * __cxa_allocate_dependent_exception ();
-extern "C" _LIBCXXABI_FUNC_VIS void __cxa_free_dependent_exception (void * dependent_exception);
+extern "C" _LIBCXXABI_FUNC_VIS void * __cxa_allocate_dependent_exception () _LIBCXXABI_NOEXCEPT;
+extern "C" _LIBCXXABI_FUNC_VIS void __cxa_free_dependent_exception (void * dependent_exception) _LIBCXXABI_NOEXCEPT;
 
 }  // namespace __cxxabiv1
 

@@ -46,6 +46,9 @@
 
 #include "__cxxabi_config.h"
 #include "include/atomic_support.h" // from libc++
+#if defined(__BPF__)
+#  include "bpf_platform.h"
+#endif
 #if defined(__has_include)
 #  if __has_include(<sys/futex.h>)
 #    include <sys/futex.h>
@@ -272,6 +275,80 @@ private:
   /// The address of the byte used during initialization.
   uint8_t* const init_byte_address;
 };
+
+//===----------------------------------------------------------------------===//
+//                           BPF Implementation
+//===----------------------------------------------------------------------===//
+
+#if defined(__BPF__)
+
+/// InitByteBpf - A BPF program has no threads, but it runs on every CPU of
+/// the kernel at once, and a guard is reached from all of them. The init byte
+/// is changed through a compare-and-exchange of the whole 64-bit guard, the
+/// width the kernel's atomics have: the first CPU to turn an unset guard into
+/// a pending one initializes, and the others wait for it to be complete,
+/// spinning within the verifier's loop budget (bpf_platform.h), since there
+/// is nothing to sleep on. The CPU that holds the guard is kept where the
+/// futex implementation keeps its thread id, so that a second arrival on the
+/// same CPU, a recursive initialization or a program that interrupted the
+/// initializer on its CPU and cannot be waited for, ends the program as the
+/// other implementations end a recursion.
+struct InitByteBpf {
+  InitByteBpf() = delete;
+  InitByteBpf(InitByteBpf const&) = delete;
+  InitByteBpf& operator=(InitByteBpf const&) = delete;
+
+  /// The init byte is at offset 1 of the guard and the CPU at offset 4, as
+  /// GuardObject lays them out for the futex implementation; the shifts
+  /// name the same bytes in the word, whatever the byte order.
+  explicit InitByteBpf(uint8_t* _init_byte_address, uint32_t*)
+      : word(reinterpret_cast<uint64_t*>(_init_byte_address - 1)) {}
+
+  /// The init byte portion of cxa_guard_acquire. Returns true if
+  /// initialization has already been completed.
+  bool acquire() {
+    const uint64_t cpu_tag = static_cast<uint64_t>(__libcxxabi_bpf_cpu() + 1u) << kCpuShift;
+    const uint64_t pending = (static_cast<uint64_t>(PENDING_BIT) << kInitByteShift) | cpu_tag;
+    while (_LIBCXXABI_CAN_LOOP) {
+      // Read before the exchange, so that a waiter reads the line the
+      // initializer's CPU writes rather than takes it from it on every spin.
+      uint64_t expected = std::__libcpp_atomic_load(word, std::_AO_Acquire);
+      if (expected == UNSET &&
+          std::__libcpp_atomic_compare_exchange_strong(word, &expected, pending, std::_AO_Acq_Rel, std::_AO_Acquire))
+        return false; // ours to initialize
+      const uint64_t init_byte = (expected >> kInitByteShift) & 0xff;
+      if (init_byte == COMPLETE_BIT || ((expected >> kGuardByteShift) & 0xff) != UNSET)
+        return true;
+      if ((init_byte & PENDING_BIT) == 0)
+        ABORT_WITH_MESSAGE("__cxa_guard_acquire found a guard in a state it does not know");
+      if ((expected & kCpuMask) == cpu_tag)
+        ABORT_WITH_MESSAGE("__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?");
+      // Another CPU is initializing: wait for it, or for it to give up.
+    }
+    ABORT_WITH_MESSAGE("__cxa_guard_acquire waited past the loop budget for an initialization on another CPU");
+  }
+
+  /// The init byte portion of cxa_guard_release.
+  void release() { std::__libcpp_atomic_store(word, kComplete, std::_AO_Release); }
+  /// The init byte portion of cxa_guard_abort.
+  void abort() { std::__libcpp_atomic_store(word, static_cast<uint64_t>(UNSET), std::_AO_Release); }
+
+private:
+  static constexpr bool kLittleEndian = __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__;
+  static constexpr unsigned kGuardByteShift = kLittleEndian ? 0 : 56;
+  static constexpr unsigned kInitByteShift = kLittleEndian ? 8 : 48;
+  static constexpr unsigned kCpuShift = kLittleEndian ? 32 : 0;
+  static constexpr uint64_t kCpuMask = static_cast<uint64_t>(0xffffffffu) << kCpuShift;
+  /// The whole word once initialized: the guard byte and the init byte
+  /// complete, no CPU.
+  static constexpr uint64_t kComplete = (static_cast<uint64_t>(COMPLETE_BIT) << kGuardByteShift) |
+                                        (static_cast<uint64_t>(COMPLETE_BIT) << kInitByteShift);
+
+  /// The guard as one word.
+  uint64_t* const word;
+};
+
+#endif // __BPF__
 
 //===----------------------------------------------------------------------===//
 //                     Global Mutex Implementation
@@ -616,6 +693,11 @@ public:
 /// synchronization.
 using NoThreadsGuard = GuardObject<InitByteNoThreads>;
 
+#if defined(__BPF__)
+/// BpfGuard - Manages initialization between the CPUs a BPF program runs on.
+using BpfGuard = GuardObject<InitByteBpf>;
+#endif
+
 /// GlobalMutexGuard - Manages initialization using a global mutex and
 /// condition variable.
 template <class Mutex, class CondVar, Mutex& global_mutex, CondVar& global_cond,
@@ -639,7 +721,7 @@ struct GlobalStatic {
 template <class T>
 constinit T GlobalStatic<T>::instance = {};
 
-enum class Implementation { NoThreads, GlobalMutex, Futex };
+enum class Implementation { NoThreads, GlobalMutex, Futex, Bpf };
 
 template <Implementation Impl>
 struct SelectImplementation;
@@ -660,10 +742,20 @@ struct SelectImplementation<Implementation::Futex> {
   using type = FutexGuard<PlatformFutexWait, PlatformFutexWake, PlatformThreadID>;
 };
 
+#if defined(__BPF__)
+template <>
+struct SelectImplementation<Implementation::Bpf> {
+  using type = BpfGuard;
+};
+#endif
+
 // TODO(EricWF): We should prefer the futex implementation when available. But
 // it should be done in a separate step from adding the implementation.
 constexpr Implementation CurrentImplementation =
-#if defined(_LIBCXXABI_HAS_NO_THREADS)
+#if defined(__BPF__)
+    // No threads, but every CPU at once: before the no-threads choice.
+    Implementation::Bpf;
+#elif defined(_LIBCXXABI_HAS_NO_THREADS)
     Implementation::NoThreads;
 #elif defined(_LIBCXXABI_USE_FUTEX)
     Implementation::Futex;
