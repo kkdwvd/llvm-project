@@ -4936,6 +4936,7 @@ static bool isCatchAll(EHPersonality Personality, Constant *TypeInfo) {
   case EHPersonality::XL_CXX:
   case EHPersonality::ZOS_CXX:
   case EHPersonality::Wasm_D:
+  case EHPersonality::BPF_CXX:
     return isa<ConstantPointerNull>(TypeInfo);
   }
   llvm_unreachable("invalid enum");

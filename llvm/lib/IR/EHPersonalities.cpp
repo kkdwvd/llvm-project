@@ -53,6 +53,7 @@ EHPersonality llvm::classifyEHPersonality(const Value *Pers) {
       .Case("__xlcxx_personality_v1", EHPersonality::XL_CXX)
       .Case("__zos_cxx_personality_v2", EHPersonality::ZOS_CXX)
       .Case("_d_eh_personality_wasm", EHPersonality::Wasm_D)
+      .Case("__gxx_bpf_personality_v0", EHPersonality::BPF_CXX)
       .Default(EHPersonality::Unknown);
 }
 
@@ -89,6 +90,8 @@ StringRef llvm::getEHPersonalityName(EHPersonality Pers) {
     return "__zos_cxx_personality_v2";
   case EHPersonality::Wasm_D:
     return "_d_eh_personality_wasm";
+  case EHPersonality::BPF_CXX:
+    return "__gxx_bpf_personality_v0";
   case EHPersonality::Unknown:
     llvm_unreachable("Unknown EHPersonality!");
   }

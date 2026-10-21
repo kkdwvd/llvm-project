@@ -58,7 +58,10 @@ public:
   EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                          EVT VT) const override;
 
-  // Exception handling support.
+  // Exception handling support. A landing pad finds the exception object in
+  // r0, where the callee's unwind_exit left it. No personality routine sets
+  // a selector: the pad computes it (BPFUnwind.cpp), and nothing reads r0 for
+  // it.
   Register getExceptionPointerRegister(ExceptionHandling EH,
                                        const Constant *) const override {
     return BPF::R0;
@@ -99,6 +102,7 @@ private:
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
 
   template <class NodeTy>
   SDValue getAddr(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;

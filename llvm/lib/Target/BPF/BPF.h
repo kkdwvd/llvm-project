@@ -35,8 +35,8 @@ public:
 };
 
 ModulePass *createBPFCheckAndAdjustIRLegacyPass();
-/// Turn resume into llvm.bpf.unwind.exit, and every call that may unwind into
-/// an invoke. See BPFUnwind.cpp.
+/// Turn resume into llvm.bpf.unwind.exit, make every call that may unwind an
+/// invoke, and have every landing pad compute its selector. See BPFUnwind.cpp.
 class BPFUnwindPreparePass
     : public RequiredPassInfoMixin<BPFUnwindPreparePass> {
 public:
@@ -60,6 +60,11 @@ public:
 };
 
 ModulePass *createBPFFuncTablePass();
+
+/// The function the backend calls as \p Name, declared with the debug info of
+/// its C prototype so that it has BTF, or null for a name the backend does
+/// not know. See BPFISelLowering.cpp.
+Function *getOrCreateBPFLibcall(Module *M, StringRef Name);
 
 class BPFISelDAGToDAGPass : public SelectionDAGISelPass {
 public:

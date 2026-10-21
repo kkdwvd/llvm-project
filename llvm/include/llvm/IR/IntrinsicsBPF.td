@@ -12,6 +12,14 @@
 
 // Specialized loads from packet
 let TargetPrefix = "bpf" in {  // All intrinsics start with "llvm.bpf."
+  // What a landing pad with catch clauses for types hands the personality
+  // routine it calls (BPFUnwind.cpp): its index in the function's call-site
+  // table, which the instruction selector records for the table's emitter,
+  // and the address of the function's exception table. The counterparts of
+  // llvm.wasm.landingpad.index and llvm.wasm.lsda for a landingpad.
+  def int_bpf_landingpad_index : Intrinsic<[], [llvm_i32_ty], [IntrNoMem]>;
+  def int_bpf_lsda : DefaultAttrsIntrinsic<[llvm_ptr_ty], [], [IntrNoMem]>;
+
   def int_bpf_load_byte : ClangBuiltin<"__builtin_bpf_load_byte">,
               DefaultAttrsIntrinsic<[llvm_i64_ty], [llvm_ptr_ty, llvm_i64_ty], [IntrReadMem]>;
   def int_bpf_load_half : ClangBuiltin<"__builtin_bpf_load_half">,

@@ -33,8 +33,10 @@ cleanup:
 ; CHECK-NEXT:  cleanup:
 ; CHECK-NEXT:    %lp = landingpad { ptr, i32 }
 ; CHECK-NEXT:            cleanup{{$}}
-; CHECK-NEXT:    call void @bpf_free(ptr %node) #{{[0-9]+}}{{$}}
 ; CHECK-NEXT:    %exn1 = extractvalue { ptr, i32 } %lp, 0{{$}}
+; CHECK-NEXT:    %0 = insertvalue { ptr, i32 } poison, ptr %exn1, 0{{$}}
+; CHECK-NEXT:    %1 = insertvalue { ptr, i32 } %0, i32 0, 1{{$}}
+; CHECK-NEXT:    call void @bpf_free(ptr %node) #{{[0-9]+}}{{$}}
 ; CHECK-NEXT:    call void @llvm.bpf.unwind.exit(ptr %exn1){{$}}
 ; CHECK-NEXT:    unreachable{{$}}
 ; CHECK-NEXT:  }
