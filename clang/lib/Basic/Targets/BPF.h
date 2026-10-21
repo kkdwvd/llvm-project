@@ -37,7 +37,6 @@ public:
     resetDataLayout();
     MaxAtomicPromoteWidth = 64;
     MaxAtomicInlineWidth = 64;
-    TLSSupported = false;
   }
 
   void getTargetDefines(const LangOptions &Opts,
