@@ -132,6 +132,10 @@ static void unwrapPreserveEnumValueArg(ASTContext &Context, Expr *Arg) {
 
 bool SemaBPF::CheckBPFBuiltinFunctionCall(unsigned BuiltinID,
                                           CallExpr *TheCall) {
+  // Its prototype is all there is to check.
+  if (BuiltinID == BPF::BI__builtin_bpf_unwind_exit)
+    return false;
+
   assert((BuiltinID == BPF::BI__builtin_preserve_field_info ||
           BuiltinID == BPF::BI__builtin_btf_type_id ||
           BuiltinID == BPF::BI__builtin_preserve_type_info ||

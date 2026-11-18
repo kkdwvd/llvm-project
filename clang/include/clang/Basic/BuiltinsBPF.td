@@ -35,3 +35,11 @@ def PreserveEnumValue : TargetBuiltin {
   let Attributes = [CustomTypeChecking];
   let Prototype = "long int(...)";
 }
+
+// Start or carry on an unwind of the exception object, as llvm.bpf.unwind.exit
+// does. Does not return.
+def UnwindExit : TargetBuiltin {
+  let Spellings = ["__builtin_bpf_unwind_exit"];
+  let Attributes = [NoReturn];
+  let Prototype = "void(void*)";
+}

@@ -7294,7 +7294,8 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
   assert((BuiltinID == BPF::BI__builtin_preserve_field_info ||
           BuiltinID == BPF::BI__builtin_btf_type_id ||
           BuiltinID == BPF::BI__builtin_preserve_type_info ||
-          BuiltinID == BPF::BI__builtin_preserve_enum_value) &&
+          BuiltinID == BPF::BI__builtin_preserve_enum_value ||
+          BuiltinID == BPF::BI__builtin_bpf_unwind_exit) &&
          "unexpected BPF builtin");
 
   // A sequence number, injected into IR builtin functions, to
@@ -7305,6 +7306,13 @@ Value *CodeGenFunction::EmitBPFBuiltinExpr(unsigned BuiltinID,
   switch (BuiltinID) {
   default:
     llvm_unreachable("Unexpected BPF builtin");
+  case BPF::BI__builtin_bpf_unwind_exit: {
+    // An invoke where the call may unwind into a landing pad, as
+    // __builtin_wasm_throw is.
+    Value *Obj = EmitScalarExpr(E->getArg(0));
+    Function *Callee = CGM.getIntrinsic(Intrinsic::bpf_unwind_exit);
+    return EmitRuntimeCallOrInvoke(Callee, {Obj});
+  }
   case BPF::BI__builtin_preserve_field_info: {
     const Expr *Arg = E->getArg(0);
     bool IsBitField = Arg->IgnoreParens()->getObjectKind() == OK_BitField;
